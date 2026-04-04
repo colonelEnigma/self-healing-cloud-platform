@@ -1,11 +1,46 @@
-exports.registerUser = (req, res) => {
-    res.json({ message: "User registered (mock)" });
+const pool = require("../config/db");
+const bcrypt = require("bcrypt");
+
+exports.registerUser = async (req, res) => {
+    const { email, password } = req.body;
+
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        const result = await pool.query(
+            "INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id, email",
+            [email, hashedPassword]
+        );
+
+        res.json(result);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 };
 
-exports.loginUser = (req, res) => {
-    res.json({ message: "User logged in (mock)" });
-};
+exports.loginUser = async (req, res) => {
+    const { email, password } = req.body;
 
-exports.getUser = (req, res) => {
-    res.json({ message: `Get user ${req.params.id}` });
+    try {
+        const result = await pool.query(
+            "SELECT * FROM users WHERE email = $1",
+            [email]
+        );
+
+        const user = result.rows[0];
+
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        const isMatch = await bcrypt.compare(password, user.password);
+
+        if (!isMatch) {
+            return res.status(401).json({ error: "Invalid credentials" });
+        }
+
+        res.json({ message: "Login successful" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 };
