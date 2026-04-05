@@ -2,14 +2,17 @@ const pool = require("../config/db");
 const bcrypt = require("bcrypt");
 
 exports.registerUser = async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password, name } = req.body;
 
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
+        if (!email || email.trim() === "") {
+            return res.status(400).json({ error: "Email is required" });
+        }
 
         const result = await pool.query(
-            "INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id, email",
-            [email, hashedPassword]
+            "INSERT INTO users (email, password, name) VALUES ($1, $2, $3) RETURNING id, email, name",
+            [email, hashedPassword, name]
         );
 
         res.json(result);
