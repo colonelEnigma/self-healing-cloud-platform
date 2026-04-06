@@ -1,5 +1,4 @@
 import { useAuth } from "auth/AuthProvider";
-import RequireAuth from "auth/RequireAuth";
 import { useState, useEffect, useMemo } from "react";
 
 // react-router components

@@ -3,16 +3,21 @@ const pool = require("./db");
 const initDb = async () => {
   try {
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS users (
+      CREATE TABLE IF NOT EXISTS products (
         id SERIAL PRIMARY KEY,
-        email VARCHAR(255) UNIQUE NOT NULL,
-        password VARCHAR(255) NOT NULL,
         name VARCHAR(255) NOT NULL,
+        description TEXT,
+        category VARCHAR(100),
+        price NUMERIC(10,2) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
-    console.log("Database initialized (users table ready)");
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
+    `);
+
+    console.log("Products table ready");
   } catch (err) {
     console.error("DB Init Error:", err.message);
   }

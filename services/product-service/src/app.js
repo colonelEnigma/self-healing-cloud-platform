@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const userRoutes = require("./routes/userRoutes");
+const productRoutes = require("./routes/productRoutes");
 
 const app = express();
 
@@ -14,11 +14,11 @@ app.use(
 app.use(express.json());
 
 // routes
-app.use("/users", userRoutes);
+app.use("/api", productRoutes);
 
 // health check
 app.get("/health", (req, res) => {
-  res.status(200).json({ status: "user-service is running" });
+  res.status(200).json({ status: "product-service is running" });
 });
 
 module.exports = app;
