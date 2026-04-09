@@ -8,12 +8,21 @@ const app = express();
 
 app.use(express.json());
 
-initDb();
-
 app.use("/api", orderRoutes);
 
 const PORT = process.env.PORT || 3003;
 
-app.listen(PORT, () => {
-  console.log(`Order service running on port ${PORT}`);
-});
+const startServer = async () => {
+  try {
+    await initDb(); // ✅ wait for table creation
+
+    app.listen(PORT, () => {
+      console.log(`Order Service running on port ${PORT}`);
+    });
+  } catch (err) {
+    console.error("Failed to start server:", err);
+    process.exit(1); // exit if DB init fails
+  }
+};
+
+startServer();

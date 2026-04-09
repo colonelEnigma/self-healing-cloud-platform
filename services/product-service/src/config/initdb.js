@@ -1,26 +1,38 @@
 const pool = require("./db");
 
+const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+
 const initDb = async () => {
-  try {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS products (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        description TEXT,
-        category VARCHAR(100),
-        price NUMERIC(10,2) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
+  let retries = 10;
 
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
-    `);
+  while (retries) {
+    try {
+      console.log("Connecting to DB:", process.env.DB_NAME);
 
-    console.log("Products table ready");
-  } catch (err) {
-    console.error("DB Init Error:", err.message);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS products (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          description TEXT,
+          category VARCHAR(100),
+          price NUMERIC(10,2) NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      console.log("Database initialized (products table ready)");
+      return;
+    } catch (err) {
+      console.error("DB Init Error:", err.message);
+
+      retries--;
+      console.log(`Retries left: ${retries}`);
+
+      await sleep(5000); // wait 5 sec before retry
+    }
   }
+
+  throw new Error("Could not connect to DB after retries");
 };
 
 module.exports = initDb;
