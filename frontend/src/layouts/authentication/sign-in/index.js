@@ -40,6 +40,7 @@ import MDButton from "components/MDButton";
 
 // Authentication layout components
 import BasicLayout from "layouts/authentication/components/BasicLayout";
+import API_URLS from "./config";
 
 // Images
 import bgImage from "assets/images/bg-sign-in-basic.jpeg";
@@ -58,7 +59,7 @@ function Basic() {
     e.preventDefault();
 
     try {
-      const res = await axios.post("http://localhost:3000/users/login", {
+      const res = await axios.post(`${API_URLS.USER}/users/login`, {
         email,
         password,
       });
