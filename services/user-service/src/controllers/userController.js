@@ -1,31 +1,51 @@
 const pool = require("../config/db");
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs"); // ✅ fixed
 const jwt = require("jsonwebtoken");
 
+// REGISTER
 exports.registerUser = async (req, res) => {
   const { email, password, name } = req.body;
 
   try {
-    const hashedPassword = await bcrypt.hash(password, 10);
-    if (!email || email.trim() === "") {
-      return res.status(400).json({ error: "Email is required" });
+    // ✅ Validate input first
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required" });
     }
 
+    // ✅ Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
     const result = await pool.query(
-      "INSERT INTO users (email, password, name) VALUES ($1, $2, $3) RETURNING id, email, name",
+      `INSERT INTO users (email, password, name)
+       VALUES ($1, $2, $3)
+       RETURNING id, email, name`,
       [email, hashedPassword, name],
     );
 
-    res.json(result);
+    res.status(201).json({
+      message: "User registered successfully",
+      user: result.rows[0],
+    });
   } catch (err) {
+    // ✅ Handle duplicate email (PostgreSQL unique violation)
+    if (err.code === "23505") {
+      return res.status(400).json({ error: "Email already exists" });
+    }
+
     res.status(500).json({ error: err.message });
   }
 };
 
+// LOGIN
 exports.loginUser = async (req, res) => {
   const { email, password } = req.body;
 
   try {
+    // ✅ Validate input
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required" });
+    }
+
     const result = await pool.query("SELECT * FROM users WHERE email = $1", [
       email,
     ]);
@@ -36,17 +56,18 @@ exports.loginUser = async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
+    // ✅ Compare password
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    // create JWT
+    // ✅ Create JWT
     const token = jwt.sign(
       { id: user.id, email: user.email },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN },
+      { expiresIn: process.env.JWT_EXPIRES_IN || "1d" },
     );
 
     res.json({
@@ -58,12 +79,13 @@ exports.loginUser = async (req, res) => {
   }
 };
 
+// GET PROFILE
 exports.getProfile = async (req, res) => {
   try {
     const userId = req.user.id;
 
     const result = await pool.query(
-      "SELECT id, email FROM users WHERE id = $1",
+      "SELECT id, email, name FROM users WHERE id = $1",
       [userId],
     );
 
@@ -81,6 +103,7 @@ exports.getProfile = async (req, res) => {
   }
 };
 
+// UPDATE PROFILE
 exports.updateProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -120,6 +143,11 @@ exports.updateProfile = async (req, res) => {
       user: result.rows[0],
     });
   } catch (err) {
+    // ✅ Handle duplicate email on update
+    if (err.code === "23505") {
+      return res.status(400).json({ error: "Email already exists" });
+    }
+
     console.error("Profile update error:", err);
     res.status(500).json({ message: "Server error" });
   }

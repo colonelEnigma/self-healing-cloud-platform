@@ -16,7 +16,7 @@ exports.createPayment = async (req, res) => {
 
     try {
       const orderRes = await axios.get(
-        `http://localhost:3003/api/orders/${orderId}`,
+        `http://order-service:3003/api/orders/${orderId}`,
         {
           headers: {
             Authorization: req.headers.authorization,
@@ -24,8 +24,11 @@ exports.createPayment = async (req, res) => {
         },
       );
 
+      console.log("Order Res:", orderRes.data);
+
       order = orderRes.data;
     } catch (err) {
+      // console.log("order service ERROR: ", err);
       return res.status(400).json({
         message: "Invalid orderId or unauthorized",
       });

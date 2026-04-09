@@ -2,6 +2,7 @@ const pool = require("../config/db");
 const axios = require("axios");
 
 exports.createOrder = async (req, res) => {
+  console.log("JWT_SECRET in order-service:", process.env.JWT_SECRET);
   const client = await pool.connect();
 
   try {
@@ -35,7 +36,7 @@ exports.createOrder = async (req, res) => {
 
       // 🔥 CALL PRODUCT SERVICE
       const productRes = await axios.get(
-        `http://localhost:3005/api/products/${product_id}`,
+        `http://product-service:3005/api/products/${product_id}`,
       );
 
       const product = productRes.data;
