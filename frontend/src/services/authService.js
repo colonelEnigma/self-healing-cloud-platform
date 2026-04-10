@@ -1,8 +1,8 @@
-import API from "./api";
+import { userApi } from "./api";
 
 export const registerUser = async (data) => {
   try {
-    const response = await API.post("/users/register", data);
+    const response = await userApi.post("/users/register", data);
     return response.data;
   } catch (error) {
     console.error("Register Error:", error.response?.data || error.message);

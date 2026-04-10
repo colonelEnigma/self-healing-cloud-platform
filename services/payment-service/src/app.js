@@ -14,7 +14,7 @@ app.use(
 app.use(express.json());
 
 // routes
-app.use("/users", paymentRoutes);
+app.use("/api", paymentRoutes);
 
 // health check
 app.get("/health", (req, res) => {

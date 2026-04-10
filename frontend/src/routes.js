@@ -6,11 +6,23 @@ import Profile from "layouts/profile";
 import SignIn from "layouts/authentication/sign-in";
 import SignUp from "layouts/authentication/sign-up";
 import SignOut from "layouts/authentication/sign-out";
+import Orders from "layouts/orders";
+import Home from "layouts/home";
+import ProductsByCategory from "layouts/home/data/ProductsByCategory";
 
 // @mui icons
 import Icon from "@mui/material/Icon";
 
 const routes = [
+  {
+    type: "collapse",
+    name: "Home",
+    key: "home",
+    icon: <Icon fontSize="small">home</Icon>,
+    route: "/home",
+    component: <Home />,
+    protected: true,
+  },
   {
     type: "collapse",
     name: "Dashboard",
@@ -82,6 +94,21 @@ const routes = [
     route: "/authentication/sign-out",
     component: <SignOut />,
     protected: false,
+  },
+  {
+    type: "collapse",
+    name: "Orders",
+    key: "orders",
+    icon: <Icon fontSize="small">shopping_cart</Icon>,
+    route: "/orders",
+    component: <Orders />,
+    protected: true,
+  },
+  {
+    key: "products",
+    route: "/products/:category",
+    component: <ProductsByCategory />,
+    protected: true,
   },
 ];
 
