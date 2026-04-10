@@ -1,15 +1,9 @@
 require("dotenv").config();
-const express = require("express");
 
+const app = require("./app");
 const initDb = require("./config/initdb");
-const paymentRoutes = require("./routes/paymentRoutes");
 
-const app = express();
 const PORT = process.env.PORT || 3004;
-
-app.use(express.json());
-
-app.use("/api", paymentRoutes);
 
 const startServer = async () => {
   try {
@@ -17,6 +11,7 @@ const startServer = async () => {
 
     app.listen(PORT, () => {
       console.log(`Payment Service running on port ${PORT}`);
+      console.log("Connecting to DB:", process.env.DB_NAME);
     });
   } catch (err) {
     console.error("Failed to start server:", err);

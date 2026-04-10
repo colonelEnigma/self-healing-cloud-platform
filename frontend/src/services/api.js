@@ -1,19 +1,27 @@
+// services/apiClient.js
 import axios from "axios";
 import API_URLS from "../config";
 
-const API = axios.create({
-  baseURL: API_URLS.USER,
-  withCredentials: true,
-});
+function createApiClient(baseURL) {
+  const client = axios.create({
+    baseURL,
+    withCredentials: true,
+  });
 
-API.interceptors.request.use((config) => {
-  const token = localStorage.getItem("accessToken");
+  client.interceptors.request.use((config) => {
+    const token = localStorage.getItem("accessToken");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  });
 
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  return client;
+}
 
-  return config;
-});
-
-export default API;
+// Export clients for each service
+export const userApi = createApiClient(API_URLS.USER);
+export const orderApi = createApiClient(API_URLS.ORDER);
+export const paymentApi = createApiClient(API_URLS.PAYMENT);
+export const productApi = createApiClient(API_URLS.PRODUCT);
+export const searchApi = createApiClient(API_URLS.SEARCH);

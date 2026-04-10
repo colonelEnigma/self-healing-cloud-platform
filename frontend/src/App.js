@@ -28,6 +28,7 @@ import themeDarkRTL from "assets/theme-dark/theme-rtl";
 import rtlPlugin from "stylis-plugin-rtl";
 import { CacheProvider } from "@emotion/react";
 import createCache from "@emotion/cache";
+import MDSnackbar from "components/MDSnackbar";
 
 // Material Dashboard 2 React routes
 import routes from "routes";
@@ -39,7 +40,47 @@ import { useMaterialUIController, setMiniSidenav, setOpenConfigurator } from "co
 import brandWhite from "assets/images/logo-ct.png";
 import brandDark from "assets/images/logo-ct-dark.png";
 
+// cart
+import { CartProvider } from "./layouts/cart/cartContext";
+import CartBanner from "./layouts/cart/cartBanner";
+
 export default function App() {
+  // inside App component
+  const [successSB, setSuccessSB] = useState(false);
+  const [errorSB, setErrorSB] = useState(false);
+
+  const openSuccessSB = () => setSuccessSB(true);
+  const closeSuccessSB = () => setSuccessSB(false);
+  const openErrorSB = () => setErrorSB(true);
+  const closeErrorSB = () => setErrorSB(false);
+
+  const renderSuccessSB = (
+    <MDSnackbar
+      color="success"
+      icon="check"
+      title="Order Success"
+      content="Your order has been placed successfully!"
+      dateTime={new Date().toLocaleTimeString()}
+      open={successSB}
+      onClose={closeSuccessSB}
+      close={closeSuccessSB}
+      bgWhite
+    />
+  );
+
+  const renderErrorSB = (
+    <MDSnackbar
+      color="error"
+      icon="warning"
+      title="Order Failed"
+      content="There was a problem placing your order."
+      dateTime={new Date().toLocaleTimeString()}
+      open={errorSB}
+      onClose={closeErrorSB}
+      close={closeErrorSB}
+      bgWhite
+    />
+  );
   const { token } = useAuth();
   const [controller, dispatch] = useMaterialUIController();
   const {
@@ -142,7 +183,37 @@ export default function App() {
 
   return direction === "rtl" ? (
     <CacheProvider value={rtlCache}>
-      <ThemeProvider theme={darkMode ? themeDarkRTL : themeRTL}>
+      <CartProvider>
+        <ThemeProvider theme={darkMode ? themeDarkRTL : themeRTL}>
+          <CssBaseline />
+          {layout === "dashboard" && (
+            <>
+              <Sidenav
+                color={sidenavColor}
+                brand={(transparentSidenav && !darkMode) || whiteSidenav ? brandDark : brandWhite}
+                brandName="Material Dashboard 2"
+                routes={routes}
+                onMouseEnter={handleOnMouseEnter}
+                onMouseLeave={handleOnMouseLeave}
+              />
+              <Configurator />
+              {configsButton}
+            </>
+          )}
+          {layout === "vr" && <Configurator />}
+          <Routes>
+            {getRoutes(routes)}
+            <Route path="*" element={<Navigate to="/dashboard" />} />
+          </Routes>
+          <CartBanner onSuccess={openSuccessSB} onError={openErrorSB} />
+          {renderSuccessSB}
+          {renderErrorSB}
+        </ThemeProvider>
+      </CartProvider>
+    </CacheProvider>
+  ) : (
+    <CartProvider>
+      <ThemeProvider theme={darkMode ? themeDark : theme}>
         <CssBaseline />
         {layout === "dashboard" && (
           <>
@@ -163,30 +234,10 @@ export default function App() {
           {getRoutes(routes)}
           <Route path="*" element={<Navigate to="/dashboard" />} />
         </Routes>
+        <CartBanner onSuccess={openSuccessSB} onError={openErrorSB} />
+        {renderSuccessSB}
+        {renderErrorSB}
       </ThemeProvider>
-    </CacheProvider>
-  ) : (
-    <ThemeProvider theme={darkMode ? themeDark : theme}>
-      <CssBaseline />
-      {layout === "dashboard" && (
-        <>
-          <Sidenav
-            color={sidenavColor}
-            brand={(transparentSidenav && !darkMode) || whiteSidenav ? brandDark : brandWhite}
-            brandName="Material Dashboard 2"
-            routes={routes}
-            onMouseEnter={handleOnMouseEnter}
-            onMouseLeave={handleOnMouseLeave}
-          />
-          <Configurator />
-          {configsButton}
-        </>
-      )}
-      {layout === "vr" && <Configurator />}
-      <Routes>
-        {getRoutes(routes)}
-        <Route path="*" element={<Navigate to="/dashboard" />} />
-      </Routes>
-    </ThemeProvider>
+    </CartProvider>
   );
 }

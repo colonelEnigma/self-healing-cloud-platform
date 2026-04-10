@@ -68,7 +68,7 @@ function Basic() {
 
       login(token); // save token in context/localStorage
 
-      navigate("/dashboard");
+      navigate("/home");
     } catch (err) {
       console.error("Login failed", err);
       alert("Invalid credentials");
