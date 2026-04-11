@@ -37,18 +37,18 @@ const startConsumer = async (io) => {
 
         console.log("Search received:", data);
 
-        const { orderId, userId, total_amount } = data;
+        const { orderId, user_id, total_amount } = data;
 
         await pool.query(
           `INSERT INTO orders_search (order_id, user_id, total_amount)
            VALUES ($1, $2, $3)
            ON CONFLICT (order_id) DO NOTHING`,
-          [orderId, userId, total_amount],
+          [orderId, user_id, total_amount],
         );
 
         io.emit("order_created", {
           id: data.orderId,
-          user_id: data.userId,
+          user_id: data.user_id,
           total_amount: data.total_amount,
           status: data.status,
           created_at: data.created_at,
