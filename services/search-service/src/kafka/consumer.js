@@ -3,7 +3,7 @@ const pool = require("../config/db");
 
 const consumer = kafka.consumer({ groupId: "search-group" });
 
-const startConsumer = async () => {
+const startConsumer = async (io) => {
   const connectWithRetry = async () => {
     const maxRetries = 10;
     let attempt = 0;
@@ -45,6 +45,14 @@ const startConsumer = async () => {
            ON CONFLICT (order_id) DO NOTHING`,
           [orderId, userId, total_amount],
         );
+
+        io.emit("order_created", {
+          id: data.orderId,
+          user_id: data.userId,
+          total_amount: data.total_amount,
+          status: data.status,
+          created_at: data.created_at,
+        });
 
         console.log(`Order indexed: ${orderId}`);
       } catch (err) {

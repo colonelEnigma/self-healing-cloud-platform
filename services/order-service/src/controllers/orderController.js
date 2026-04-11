@@ -66,8 +66,10 @@ exports.createOrder = async (req, res) => {
     await sendMessage("order_created", {
       event: "order_created",
       orderId: order.id,
-      userId,
+      user_id: order.user_id,
       total_amount: totalAmount,
+      status: order.status,
+      created_at: order.created_at,
       items,
     });
 

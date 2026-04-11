@@ -17,23 +17,40 @@ import { getPayment } from "../../services/paymentService";
 import ordersDialog from "./data/style";
 import MenuItem from "@mui/material/MenuItem";
 import menuItem from "examples/Items/NotificationItem/styles";
+import { initSocket } from "../../services/orderService";
 
 function Orders() {
   const [open, setOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [rows, setRows] = useState([]);
 
+  const formatOrderRow = (order) => ({
+    id: order.id,
+    status: order.status,
+    total: order.total_amount,
+    created: new Date(order.created_at).toLocaleString(),
+    action: (
+      <MDTypography
+        component="a"
+        href="#"
+        variant="caption"
+        color="info"
+        fontWeight="medium"
+        onClick={() => handleOpen(order)}
+        sx={{ cursor: "pointer" }}
+      >
+        View
+      </MDTypography>
+    ),
+  });
+
   const handleOpen = async (order) => {
     try {
       const paymentDetails = await getPayment(order.id);
-
-      // If paymentDetails.status is missing, default to "pending"
       const paymentStatus = paymentDetails?.status || "pending";
-
       setSelectedOrder({ ...order, paymentStatus });
       setOpen(true);
-    } catch (err) {
-      // In case of error, also default to "pending"
+    } catch {
       setSelectedOrder({ ...order, paymentStatus: "pending" });
       setOpen(true);
     }
@@ -45,28 +62,22 @@ function Orders() {
   };
 
   useEffect(() => {
+    // Initial fetch
     getOrders().then((data) => {
-      const formattedRows = data.map((order) => ({
-        id: order.id,
-        status: order.status,
-        total: order.total_amount,
-        created: new Date(order.created_at).toLocaleString(),
-        action: (
-          <MDTypography
-            component="a"
-            href="#"
-            variant="caption"
-            color="info"
-            fontWeight="medium"
-            onClick={() => handleOpen(order)}
-            sx={{ cursor: "pointer" }}
-          >
-            View
-          </MDTypography>
-        ),
-      }));
-      setRows(formattedRows);
+      setRows(data.map(formatOrderRow));
     });
+
+    // Initialize socket
+    const socket = initSocket();
+
+    socket.on("order_created", (newOrder) => {
+      console.log("New order received:", newOrder);
+      setRows((prev) => [formatOrderRow(newOrder), ...prev]);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   }, []);
 
   const columns = [
@@ -105,7 +116,7 @@ function Orders() {
                   entriesPerPage={false}
                   showTotalEntries={false}
                   noEndBorder
-                  sx={(theme) => ordersTable(theme)}
+                  sx={(theme) => ordersDialog(theme)}
                 />
               </MDBox>
             </Card>
@@ -116,14 +127,7 @@ function Orders() {
       {/* Dialog */}
       <MenuItem sx={(theme) => menuItem(theme)}>
         <Dialog open={open} onClose={handleClose}>
-          <DialogTitle
-            sx={(theme) => ({
-              backgroundColor: theme.palette.background.default,
-            })}
-          >
-            Order Details
-          </DialogTitle>
-
+          <DialogTitle>Order Details</DialogTitle>
           <DialogContent>
             {selectedOrder && (
               <>
@@ -155,12 +159,7 @@ function Orders() {
               </>
             )}
           </DialogContent>
-
-          <DialogActions
-            sx={(theme) => ({
-              backgroundColor: theme.palette.background.default,
-            })}
-          >
+          <DialogActions>
             <Button onClick={handleClose} color="inherit">
               Close
             </Button>
