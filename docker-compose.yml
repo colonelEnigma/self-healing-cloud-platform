@@ -141,3 +141,24 @@ services:
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
 
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml
+    depends_on:
+      - search-service
+      - order-service
+      - user-service
+      - payment-service
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - "3007:3000"
+    depends_on:
+      - prometheus

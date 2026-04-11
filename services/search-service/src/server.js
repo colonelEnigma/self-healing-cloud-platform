@@ -8,6 +8,10 @@ require("dotenv").config();
 const searchRoutes = require("./routes/searchRoutes");
 const initDb = require("./config/initdb");
 
+// 🔥 Metrics
+const { client } = require("./metrics/metrics");
+const metricsMiddleware = require("./middleware/metricsMiddleware");
+
 const app = express();
 
 // ✅ CORS
@@ -19,6 +23,16 @@ app.use(
 );
 
 app.use(express.json());
+
+// ✅ Metrics middleware (global)
+app.use(metricsMiddleware);
+
+// ✅ Metrics endpoint
+app.get("/metrics", async (req, res) => {
+  console.log("metrics hit!!");
+  res.set("Content-Type", client.register.contentType);
+  res.end(await client.register.metrics());
+});
 
 // routes
 app.use("/search", searchRoutes);

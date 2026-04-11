@@ -5,6 +5,8 @@ require("dotenv").config();
 
 const initDb = require("./config/initdb");
 const orderRoutes = require("./routes/orderRoutes");
+const { client } = require("./metrics/metrics");
+const metricsMiddleware = require("./middleware/metricsMiddleware");
 
 const app = express();
 
@@ -17,6 +19,17 @@ app.use(
 );
 
 app.use(express.json());
+
+// add middleware
+app.use(metricsMiddleware);
+
+// expose metrics endpoint
+app.get("/metrics", async (req, res) => {
+  console.log("Order metrics hit!");
+  res.set("Content-Type", client.register.contentType);
+  res.end(await client.register.metrics());
+});
+
 app.use("/api", orderRoutes);
 
 const PORT = process.env.PORT || 3003;
