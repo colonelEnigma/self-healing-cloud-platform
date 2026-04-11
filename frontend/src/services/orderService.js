@@ -1,4 +1,8 @@
 import { orderApi } from "./api";
+import { io } from "socket.io-client";
+import API_URLS from "../config";
+
+let socket;
 
 export async function getOrders() {
   try {
@@ -20,3 +24,17 @@ export async function createOrder(orderData) {
     throw new Error("Failed to create order");
   }
 }
+
+export const initSocket = () => {
+  if (!socket) {
+    socket = io(API_URLS.SEARCH); // 👈 your backend socket server
+  }
+  return socket;
+};
+
+export const getSocket = () => {
+  if (!socket) {
+    throw new Error("Socket not initialized. Call initSocket() first.");
+  }
+  return socket;
+};
