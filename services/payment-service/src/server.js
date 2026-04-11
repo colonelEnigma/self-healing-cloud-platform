@@ -1,5 +1,5 @@
 require("dotenv").config();
-
+const startConsumer = require("./kafka/consumer");
 const app = require("./app");
 const initDb = require("./config/initdb");
 
@@ -8,6 +8,8 @@ const PORT = process.env.PORT || 3004;
 const startServer = async () => {
   try {
     await initDb(); // ✅ wait for table creation
+
+    await startConsumer();
 
     app.listen(PORT, () => {
       console.log(`Payment Service running on port ${PORT}`);

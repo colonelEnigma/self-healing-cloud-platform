@@ -1,14 +1,21 @@
-const redis = require("redis");
+const pool = require("./db");
 
-const client = redis.createClient({
-  socket: {
-    host: process.env.REDIS_HOST,
-    port: process.env.REDIS_PORT,
-  },
-});
+const initDb = async () => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS orders_search (
+        id SERIAL PRIMARY KEY,
+        order_id INT UNIQUE,
+        user_id INT,
+        total_amount NUMERIC(10,2),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
 
-client.connect();
+    console.log("Search DB initialized (orders_search ready)");
+  } catch (err) {
+    console.error("Search DB Init Error:", err.message);
+  }
+};
 
-client.on("error", (err) => console.error("Redis error:", err));
-
-module.exports = client;
+module.exports = initDb;

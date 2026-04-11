@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const { connectProducer } = require("./kafka/producer");
 require("dotenv").config();
 
 const initDb = require("./config/initdb");
@@ -23,6 +24,7 @@ const PORT = process.env.PORT || 3003;
 const startServer = async () => {
   try {
     await initDb(); // ✅ wait for table creation
+    await connectProducer();
 
     app.listen(PORT, () => {
       console.log(`Order Service running on port ${PORT}`);

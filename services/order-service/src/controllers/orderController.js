@@ -1,5 +1,6 @@
 const pool = require("../config/db");
 const axios = require("axios");
+const { sendMessage } = require("../kafka/producer");
 
 exports.createOrder = async (req, res) => {
   console.log("JWT_SECRET in order-service:", process.env.JWT_SECRET);
@@ -60,6 +61,15 @@ exports.createOrder = async (req, res) => {
     ]);
 
     await client.query("COMMIT");
+
+    //publish event
+    await sendMessage("order_created", {
+      event: "order_created",
+      orderId: order.id,
+      userId,
+      total_amount: totalAmount,
+      items,
+    });
 
     res.status(201).json({
       message: "Order created",

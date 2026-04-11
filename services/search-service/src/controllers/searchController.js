@@ -1,27 +1,22 @@
-const { searchProducts } = require("../service/searchService");
+const pool = require("../config/db");
 
-const search = async (req, res) => {
+exports.searchOrders = async (req, res) => {
   try {
-    const { q, category, minPrice, maxPrice, page = 1, limit = 10 } = req.query;
+    const { userId } = req.query;
 
-    const results = await searchProducts({
-      query: q,
-      category,
-      minPrice,
-      maxPrice,
-      page: parseInt(page),
-      limit: parseInt(limit),
-    });
+    let query = "SELECT * FROM orders_search";
+    let values = [];
 
-    res.json({
-      page: parseInt(page),
-      limit: parseInt(limit),
-      results,
-    });
+    if (userId) {
+      query += " WHERE user_id = $1";
+      values.push(userId);
+    }
+
+    const result = await pool.query(query, values);
+
+    res.json(result.rows);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error("Search error:", err.message);
+    res.status(500).json({ message: "Server error" });
   }
 };
-
-module.exports = { search };
