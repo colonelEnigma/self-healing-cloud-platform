@@ -10,7 +10,25 @@ const httpRequestDuration = new client.Histogram({
   labelNames: ["method", "route", "status_code"],
 });
 
+const kafkaMessagesConsumed = new client.Counter({
+  name: "kafka_messages_consumed_total",
+  help: "Total Kafka messages consumed",
+});
+
+const kafkaProcessingDuration = new client.Histogram({
+  name: "kafka_processing_duration_seconds",
+  help: "Time taken to process Kafka message",
+});
+
+const kafkaProcessingErrors = new client.Counter({
+  name: "kafka_processing_errors_total",
+  help: "Total Kafka processing errors",
+});
+
 module.exports = {
   client,
   httpRequestDuration,
+  kafkaMessagesConsumed,
+  kafkaProcessingDuration,
+  kafkaProcessingErrors,
 };

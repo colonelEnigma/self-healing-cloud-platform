@@ -1,7 +1,31 @@
 const kafka = require("./client");
 const pool = require("../config/db");
+const {
+  kafkaMessagesConsumed,
+  kafkaProcessingDuration,
+  kafkaProcessingErrors,
+} = require("../metrics/metrics");
 
 const consumer = kafka.consumer({ groupId: "payment-group" });
+
+/**
+ * Handles the business logic for processing an incoming Kafka event.
+ */
+const processEvent = async (data, pool) => {
+  console.log("Received event:", data);
+
+  const { orderId, total_amount } = data;
+
+  // 🔥 Auto create payment
+  await pool.query(
+    `INSERT INTO payments (order_id, amount, status)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (order_id) DO NOTHING`,
+    [orderId, total_amount, "success"],
+  );
+
+  console.log(`Payment created for order: ${orderId}`);
+};
 
 const startConsumer = async () => {
   const connectWithRetry = async () => {
@@ -28,28 +52,25 @@ const startConsumer = async () => {
 
   await consumer.subscribe({ topic: "order_created", fromBeginning: true });
 
-  console.log("Search Service Kafka Consumer running");
+  console.log("Payment Service Kafka Consumer running");
 
   await consumer.run({
-    eachMessage: async ({ message }) => {
+    eachMessage: async ({ topic, partition, message }) => {
+      const start = Date.now();
+
       try {
         const data = JSON.parse(message.value.toString());
 
-        console.log("Received event:", data);
+        // 👉 your existing logic now lives in processEvent
+        await processEvent(data, pool);
 
-        const { orderId, total_amount } = data;
-
-        // 🔥 Auto create payment
-        await pool.query(
-          `INSERT INTO payments (order_id, amount, status)
-           VALUES ($1, $2, $3)
-           ON CONFLICT (order_id) DO NOTHING`,
-          [orderId, total_amount, "success"],
-        );
-
-        console.log(`Payment created for order: ${orderId}`);
+        kafkaMessagesConsumed.inc();
       } catch (err) {
+        kafkaProcessingErrors.inc();
         console.error("Payment consumer error:", err.message);
+      } finally {
+        const duration = (Date.now() - start) / 1000;
+        kafkaProcessingDuration.observe(duration);
       }
     },
   });
