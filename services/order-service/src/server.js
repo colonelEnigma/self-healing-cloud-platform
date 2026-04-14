@@ -7,6 +7,7 @@ const initDb = require("./config/initdb");
 const orderRoutes = require("./routes/orderRoutes");
 const { client } = require("./metrics/metrics");
 const metricsMiddleware = require("./middleware/metricsMiddleware");
+const globalLimiter = require("./middleware/rateLimiter");
 
 const app = express();
 
@@ -20,8 +21,12 @@ app.use(
 
 app.use(express.json());
 
+app.use("/api", orderRoutes);
+
 // add middleware
 app.use(metricsMiddleware);
+app.use(globalLimiter);
+
 
 // expose metrics endpoint
 app.get("/metrics", async (req, res) => {
@@ -30,7 +35,6 @@ app.get("/metrics", async (req, res) => {
   res.end(await client.register.metrics());
 });
 
-app.use("/api", orderRoutes);
 
 const PORT = process.env.PORT || 3003;
 
