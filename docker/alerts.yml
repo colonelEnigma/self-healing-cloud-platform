@@ -1,0 +1,45 @@
+groups:
+  - name: service-alerts
+    rules:
+
+      # 🔴 High error rate
+      - alert: HighErrorRate
+        expr: sum(rate(http_request_duration_seconds_count{status_code!~"2.."}[1m])) > 0.5
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate detected"
+          description: "Too many failed requests"
+
+      # 🟡 Service down
+      - alert: ServiceDown
+        expr: up == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service is DOWN"
+          description: "One of the services is not responding"
+
+      # 🔥 Kafka consumer errors
+      - alert: KafkaProcessingErrors
+        expr: rate(kafka_processing_errors_total[1m]) > 0
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka processing errors detected"
+          description: "One or more services are encountering Kafka processing errors"
+
+
+# groups:
+#   - name: test-alerts
+#     rules:
+#       - alert: AlwaysFiringTest
+#         expr: vector(1)
+#         for: 10s
+#         labels:
+#           severity: critical
+#         annotations:
+#           summary: "Test alert always firing"

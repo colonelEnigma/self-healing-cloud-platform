@@ -1,0 +1,22 @@
+global:
+  resolve_timeout: 1m
+
+route:
+  receiver: "slack-notifications"
+
+receivers:
+  - name: "slack-notifications"
+    slack_configs:
+      - api_url: ${SLACK_WEBHOOK_URL}
+        channel: "#all-self-healing-cloud-platform"
+        title: "🚨 {{ .CommonLabels.alertname }}"
+        text: |
+          *Severity:* {{ .CommonLabels.severity }}
+
+          *Summary:* {{ .CommonAnnotations.summary }}
+
+          *Service:* {{ .CommonLabels.job }}
+
+          *Status:* {{ .Status }}
+
+          *Description:* {{ .CommonAnnotations.description }}

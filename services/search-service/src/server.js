@@ -8,25 +8,38 @@ require("dotenv").config();
 const searchRoutes = require("./routes/searchRoutes");
 const initDb = require("./config/initdb");
 
+// 🔥 Metrics
+const { client } = require("./metrics/metrics");
+const metricsMiddleware = require("./middleware/metricsMiddleware");
+
 const app = express();
 
 // ✅ CORS
 app.use(
   cors({
-    origin: "http://localhost:3001", // your frontend
+    origin: "http://localhost:3001",
     credentials: true,
   }),
 );
 
 app.use(express.json());
 
+// ✅ Metrics middleware
+app.use(metricsMiddleware);
+
+// ✅ Metrics endpoint
+app.get("/metrics", async (req, res) => {
+  res.set("Content-Type", client.register.contentType);
+  res.end(await client.register.metrics());
+});
+
 // routes
 app.use("/search", searchRoutes);
 
-// 🔥 Create HTTP server (IMPORTANT)
+// 🔥 HTTP server
 const server = http.createServer(app);
 
-// 🔥 Setup socket.io
+// 🔥 Socket.IO
 const io = new Server(server, {
   cors: {
     origin: "http://localhost:3001",
@@ -34,7 +47,7 @@ const io = new Server(server, {
   },
 });
 
-// 🔥 Optional: connection log (helps debugging)
+// 🔥 Socket debug
 io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
 
@@ -47,15 +60,20 @@ const PORT = process.env.PORT || 5003;
 
 const startServer = async () => {
   try {
-    await initDb(); // DB ready
+    await initDb();
+    console.log("Search DB initialized");
 
-    // 🔥 Pass io to Kafka consumer
-    await startConsumer(io);
-
-    // 🔥 Start server (NOT app.listen)
+    // 🔥 Start server FIRST (important in K8s)
     server.listen(PORT, () => {
       console.log(`Search Service running on port ${PORT}`);
     });
+
+    // 🔥 Start Kafka consumer (non-blocking + delayed)
+    setTimeout(() => {
+      startConsumer(io).catch((err) => {
+        console.error("Kafka consumer failed:", err.message);
+      });
+    }, 5000); // delay helps Kafka stabilize
   } catch (err) {
     console.error("Failed to start Search server:", err);
     process.exit(1);

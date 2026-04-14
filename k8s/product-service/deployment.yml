@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: product-service
+  template:
+    metadata:
+      labels:
+        app: product-service
+    spec:
+      containers:
+        - name: product-service
+          image: self-healing-cloud-platform-product-service:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 3005
+          env:
+            - name: DB_HOST
+              value: "postgres"
+            - name: DB_USER
+              value: "admin"
+            - name: DB_PASSWORD
+              value: "admin"
+            - name: DB_NAME
+              value: "productsdb"

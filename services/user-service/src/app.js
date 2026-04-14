@@ -2,6 +2,9 @@ const express = require("express");
 const cors = require("cors");
 const userRoutes = require("./routes/userRoutes");
 
+const { client } = require("./metrics/userMetrics");
+const metricsMiddleware = require("./middleware/metricsMiddleware");
+
 const app = express();
 
 app.use(
@@ -12,6 +15,15 @@ app.use(
 );
 
 app.use(express.json());
+
+app.use(metricsMiddleware);
+
+// ✅ Metrics endpoint
+app.get("/metrics", async (req, res) => {
+  console.log("User metrics hit!");
+  res.set("Content-Type", client.register.contentType);
+  res.end(await client.register.metrics());
+});
 
 // routes
 app.use("/users", userRoutes);
