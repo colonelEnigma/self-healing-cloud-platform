@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: order-service
+  template:
+    metadata:
+      labels:
+        app: order-service
+    spec:
+      containers:
+        - name: order-service
+          image: self-healing-cloud-platform-order-service:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 3003
+          env:
+            - name: PORT
+              value: "3003"
+            - name: DB_HOST
+              value: "postgres"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_USER
+              value: "admin"
+            - name: DB_PASSWORD
+              value: "admin"
+            - name: DB_NAME
+              value: "orderdb"
+            - name: JWT_SECRET
+              value: "my_super_secret_key@$$*&^%@"
+            - name: KAFKA_BROKER
+              value: "kafka:9092"
+            - name: PRODUCT_SERVICE_URL
+              value: "http://product-service:3005"

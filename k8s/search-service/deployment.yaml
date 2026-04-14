@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: search-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: search-service
+  template:
+    metadata:
+      labels:
+        app: search-service
+    spec:
+      containers:
+        - name: search-service
+          image: self-healing-cloud-platform-search-service
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 5003
+          env:
+            - name: PORT
+              value: "5003"
+            - name: DB_HOST
+              value: "postgres"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_USER
+              value: "admin"
+            - name: DB_PASSWORD
+              value: "admin"
+            - name: DB_NAME
+              value: "searchdb"
+            - name: KAFKA_BROKER
+              value: "kafka:9092"
+            
