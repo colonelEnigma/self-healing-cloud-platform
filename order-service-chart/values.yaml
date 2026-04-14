@@ -1,0 +1,21 @@
+replicaCount: 1
+
+image:
+  repository: self-healing-cloud-platform-order-service
+  tag: latest
+  pullPolicy: Never
+
+service:
+  type: NodePort
+  port: 3003
+
+env:
+  PORT: "3003"
+  DB_HOST: "postgres"
+  DB_PORT: "5432"
+  DB_USER: "admin"
+  DB_PASSWORD: "admin"
+  DB_NAME: "orderdb"
+  JWT_SECRET: "my_super_secret_key@$$*&^%@"
+  KAFKA_BROKER: "kafka:9092"
+  PRODUCT_SERVICE_URL: "http://product-service:8080"
