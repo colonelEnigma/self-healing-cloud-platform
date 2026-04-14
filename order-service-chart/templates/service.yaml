@@ -3,10 +3,10 @@ kind: Service
 metadata:
   name: order-service
 spec:
-  type: {{ .Values.service.type }}
+  type: "{{ .Values.service.type }}"
   selector:
     app: order-service
   ports:
     - port: {{ .Values.service.port }}
       targetPort: {{ .Values.service.port }}
-      nodePort: {{ .Values.service.nodePort }}
+      protocol: TCP

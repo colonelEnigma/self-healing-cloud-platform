@@ -1,21 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: order-service
+  name: product-service
+  labels:
+    app: product-service
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app: order-service
+      app: product-service
   template:
     metadata:
       labels:
-        app: order-service
+        app: product-service
     spec:
       containers:
-        - name: order-service
+        - name: product-service
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          imagePullPolicy: "{{ .Values.image.pullPolicy }}"
           ports:
             - containerPort: {{ .Values.service.port }}
           env:
@@ -31,9 +33,3 @@ spec:
               value: "{{ .Values.env.DB_PASSWORD }}"
             - name: DB_NAME
               value: "{{ .Values.env.DB_NAME }}"
-            - name: JWT_SECRET
-              value: "{{ .Values.env.JWT_SECRET }}"
-            - name: KAFKA_BROKER
-              value: "{{ .Values.env.KAFKA_BROKER }}"
-            - name: PRODUCT_SERVICE_URL
-              value: "{{ .Values.env.PRODUCT_SERVICE_URL }}"

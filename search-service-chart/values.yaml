@@ -1,0 +1,19 @@
+replicaCount: 1
+
+image:
+  repository: self-healing-cloud-platform-search-service
+  tag: latest
+  pullPolicy: Never
+
+service:
+  type: ClusterIP
+  port: 5003
+
+env:
+  PORT: "5003"
+  DB_HOST: "postgres"
+  DB_PORT: "5432"
+  DB_USER: "admin"
+  DB_PASSWORD: "admin"
+  DB_NAME: "searchdb"
+  KAFKA_BROKER: "kafka:9092"
