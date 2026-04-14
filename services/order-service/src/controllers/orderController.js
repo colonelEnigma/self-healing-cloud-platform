@@ -1,6 +1,6 @@
 const pool = require("../config/db");
-const axios = require("axios");
 const { sendMessage } = require("../kafka/producer");
+const productBreaker = require("../middleware/productBreaker");
 
 exports.createOrder = async (req, res) => {
   console.log("JWT_SECRET in order-service:", process.env.JWT_SECRET);
@@ -21,7 +21,7 @@ exports.createOrder = async (req, res) => {
       `INSERT INTO orders (user_id, status)
        VALUES ($1, $2)
        RETURNING *`,
-      [userId, "CREATED"],
+      [userId, "CREATED"]
     );
 
     const order = orderResult.rows[0];
@@ -35,22 +35,51 @@ exports.createOrder = async (req, res) => {
         throw new Error("Invalid item data");
       }
 
-      // 🔥 CALL PRODUCT SERVICE
-      const productRes = await axios.get(
-        `http://product-service:3005/api/products/${product_id}`,
-      );
+      let product;
 
-      const product = productRes.data;
+      // 🔥 RESILIENT PRODUCT CALL
+      try {
+        if (productBreaker.opened) {
+          throw new Error("PRODUCT_SERVICE_UNAVAILABLE");
+        }
+        const result = await productBreaker.fire(product_id);
+
+        if (result && result.error === "PRODUCT_SERVICE_UNAVAILABLE") {
+          throw new Error("PRODUCT_SERVICE_UNAVAILABLE");
+        }
+        
+        product = result;
+
+      } catch (error) {
+        console.error(
+          "Product service failed after retries:",
+          error.message
+        );
+
+        // 🔴 IMPORTANT: differentiate failures
+
+        // 1. Product not found (do NOT retry case)
+        if (error.response && error.response.status === 404) {
+          throw new Error("INVALID_PRODUCT");
+        }
+
+        if (!error.response) {
+          // Network / timeout / DNS → definitely service down
+          throw new Error("PRODUCT_SERVICE_UNAVAILABLE");
+        }
+
+        // 2. Service unavailable / timeout / network
+        throw new Error("PRODUCT_SERVICE_UNAVAILABLE");
+      }
 
       const price = product.price;
-
       totalAmount += quantity * price;
 
       // Insert item
       await client.query(
         `INSERT INTO order_items (order_id, product_id, quantity, price)
          VALUES ($1, $2, $3, $4)`,
-        [order.id, product_id, quantity, price],
+        [order.id, product_id, quantity, price]
       );
     }
 
@@ -62,7 +91,7 @@ exports.createOrder = async (req, res) => {
 
     await client.query("COMMIT");
 
-    //publish event
+    // publish event
     await sendMessage("order_created", {
       event: "order_created",
       orderId: order.id,
@@ -81,15 +110,30 @@ exports.createOrder = async (req, res) => {
   } catch (err) {
     await client.query("ROLLBACK");
 
-    console.error("Create order error:", err.message);
+    console.error("Create order error:", err);
 
-    // Handle product not found
-    if (err.response && err.response.status === 404) {
+    if (err.message === "INVALID_PRODUCT") {
       return res.status(400).json({
         message: "Invalid product_id",
       });
     }
 
+    if (err.message === "PRODUCT_SERVICE_UNAVAILABLE") {
+      return res.status(503).json({
+        message: "Product service unavailable. Please try again.",
+      });
+    }
+
+    // 🔥 NEW: detect axios/network leaks (extra safety)
+    if (
+      err.code === "ECONNREFUSED" ||
+      err.code === "ENOTFOUND" ||
+      err.code === "ECONNABORTED"
+    ) {
+      return res.status(503).json({
+        message: "Product service unavailable. Please try again.",
+      });
+    }
     res.status(500).json({ message: "Server error" });
   } finally {
     client.release();
