@@ -8,40 +8,39 @@ env:
 phases:
   pre_build:
     commands:
-      - echo Logging in to Amazon ECR...
+      - echo "Starting PRE_BUILD..."
 
-      # Get variables first (IMPORTANT)
-      - REGION=ap-south-1
+      # Get AWS account ID (reliable method)
       - ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
-      # Build ECR URL safely
-      - ECR_URL="$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com"
-
-      # Debug (VERY IMPORTANT)
+      # Debug (IMPORTANT)
       - echo "ACCOUNT_ID=$ACCOUNT_ID"
       - echo "REGION=$REGION"
-      - echo "ECR_URL=$ECR_URL"
 
-      # Login step (SAFE VERSION)
-      - aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.ap-south-1.amazonaws.com
-    
+      # Build ECR registry (ROOT ONLY - NO repo here)
+      - REGISTRY="$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com"
+      - echo "REGISTRY=$REGISTRY"
+
+      # Login to ECR (THIS IS THE CORRECT FORM)
+      - aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $REGISTRY
+
+      - echo "ECR login completed"
 
   build:
     commands:
-      - echo Build started on `date`
-      - echo Building Docker image...
+      - echo "Build phase started..."
 
-      # IMPORTANT: adjust path if needed
+      # Build Docker image
       - docker build -t $REPO_NAME ./services/order-service
 
-      - docker tag $REPO_NAME:latest $ECR_URI:latest
+      # Tag image for ECR
+      - docker tag $REPO_NAME:latest $REGISTRY/$REPO_NAME:latest
 
   post_build:
     commands:
-      - echo Build completed on `date`
-      - echo Pushing Docker image...
+      - echo "Pushing image to ECR..."
 
-      - docker push $ECR_URI:latest
+      # Push to ECR
+      - docker push $REGISTRY/$REPO_NAME:latest
 
-      - echo Build and push completed successfully!
-      
+      - echo "Build completed successfully!"
