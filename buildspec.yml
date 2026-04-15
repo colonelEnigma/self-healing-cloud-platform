@@ -44,3 +44,4 @@ phases:
       - docker push $REGISTRY/$REPO_NAME:latest
 
       - echo "Build completed successfully!"
+
