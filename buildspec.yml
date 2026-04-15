@@ -23,7 +23,7 @@ phases:
       - echo "ECR_URL=$ECR_URL"
 
       # Login step (SAFE VERSION)
-      - aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin $ECR_URL
+      - aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.ap-south-1.amazonaws.com
     
 
   build:
