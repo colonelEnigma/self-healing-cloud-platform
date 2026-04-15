@@ -1,3 +1,5 @@
+#This is the buildspec file for user-service-build
+
 version: 0.2
 
 env:
