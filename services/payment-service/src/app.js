@@ -27,6 +27,10 @@ app.get("/metrics", async (req, res) => {
   res.end(await client.register.metrics());
 });
 
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "payment-service is running" });
+});
+
 // routes
 app.use("/api", paymentRoutes);
 

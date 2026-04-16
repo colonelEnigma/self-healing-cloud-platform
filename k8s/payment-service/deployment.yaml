@@ -16,20 +16,48 @@ spec:
         - name: payment-service
           image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/payment-service:latest
           imagePullPolicy: Always
+
           ports:
             - containerPort: 4000
+
           env:
             - name: PORT
               value: "4000"
+
             - name: DB_HOST
-              value: postgres-postgresql
+              value: postgres
             - name: DB_PORT
               value: "5432"
             - name: DB_USER
-              value: "admin"
+              value: admin
             - name: DB_PASSWORD
-              value: "admin"
+              value: admin
             - name: DB_NAME
-              value: "paymentdb"
+              value: paymentdb
+
             - name: KAFKA_BROKER
               value: kafka:9092
+
+          # ✅ HEALTH CHECKS
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 4000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 4000
+            initialDelaySeconds: 20
+            periodSeconds: 10
+
+          # ✅ STABILITY IMPROVEMENT (IMPORTANT FOR KAFKA SERVICES)
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"

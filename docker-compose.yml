@@ -90,7 +90,7 @@ services:
       DB_PORT: 5432
       DB_USER: admin
       DB_PASSWORD: admin
-      DB_NAME: productsdb
+      DB_NAME: productdb
       JWT_SECRET: my_super_secret_key@$$*&^%@
     depends_on:
       - postgres

@@ -1,4 +1,5 @@
 CREATE DATABASE userdb;
 CREATE DATABASE orderdb;
 CREATE DATABASE paymentdb;
-CREATE DATABASE productsdb;
+CREATE DATABASE searchdb;
+CREATE DATABASE productdb;

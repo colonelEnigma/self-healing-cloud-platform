@@ -16,21 +16,26 @@ spec:
         - name: search-service
           image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/search-service:latest
           imagePullPolicy: Always
+
           ports:
             - containerPort: 5003
+
           env:
             - name: PORT
               value: "5003"
+
+            # ✅ FIXED DB HOST
             - name: DB_HOST
-              value: "postgres-postgresql"
+              value: postgres
+
             - name: DB_PORT
               value: "5432"
             - name: DB_USER
-              value: "admin"
+              value: admin
             - name: DB_PASSWORD
-              value: "admin"
+              value: admin
             - name: DB_NAME
-              value: "searchdb"
+              value: searchdb
+
             - name: KAFKA_BROKER
-              value: "kafka:9092"
-            
+              value: kafka:9092

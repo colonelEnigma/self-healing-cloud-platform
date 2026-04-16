@@ -15,26 +15,28 @@ spec:
       containers:
         - name: product-service
           image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/product-service:latest
+
           ports:
             - containerPort: 3005
+
           env:
             - name: PORT
               value: "3005"
 
+            # ✅ FIXED
             - name: DB_HOST
-              value: postgres-postgresql
+              value: postgres
 
             - name: DB_PORT
               value: "5432"
-
             - name: DB_USER
               value: admin
-
             - name: DB_PASSWORD
               value: admin
 
+            # ⚠️ NOTE: verify this DB exists
             - name: DB_NAME
-              value: userdb
+              value: productdb
 
             - name: KAFKA_BROKER
               value: kafka:9092

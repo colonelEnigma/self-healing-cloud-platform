@@ -15,16 +15,44 @@ spec:
       containers:
         - name: postgres
           image: postgres:15
+
           env:
             - name: POSTGRES_USER
               value: admin
+
             - name: POSTGRES_PASSWORD
               value: admin
+
+            # ⚠️ IMPORTANT: default DB (only bootstrap DB)
+            - name: POSTGRES_DB
+              value: postgres
+
           ports:
             - containerPort: 5432
+
           volumeMounts:
             - name: initdb
               mountPath: /docker-entrypoint-initdb.d
+
+          # ✅ basic health check (important for DB stability)
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - admin
+            initialDelaySeconds: 10
+            periodSeconds: 5
+
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - admin
+            initialDelaySeconds: 20
+            periodSeconds: 10
+
       volumes:
         - name: initdb
           configMap:
