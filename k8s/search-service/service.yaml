@@ -3,10 +3,9 @@ kind: Service
 metadata:
   name: search-service
 spec:
-  type: NodePort
   selector:
     app: search-service
   ports:
     - port: 5003
       targetPort: 5003
-      nodePort: 30003
+  type: ClusterIP

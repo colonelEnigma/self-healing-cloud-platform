@@ -1,28 +1,28 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: search-service
+  name: payment-service
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: search-service
+      app: payment-service
   template:
     metadata:
       labels:
-        app: search-service
+        app: payment-service
     spec:
       containers:
-        - name: search-service
-          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/search-service:latest
+        - name: payment-service
+          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/payment-service:latest
           imagePullPolicy: Always
           ports:
-            - containerPort: 5003
+            - containerPort: 4000
           env:
             - name: PORT
-              value: "5003"
+              value: "4000"
             - name: DB_HOST
-              value: "postgres-postgresql"
+              value: postgres-postgresql
             - name: DB_PORT
               value: "5432"
             - name: DB_USER
@@ -30,7 +30,6 @@ spec:
             - name: DB_PASSWORD
               value: "admin"
             - name: DB_NAME
-              value: "searchdb"
+              value: "paymentdb"
             - name: KAFKA_BROKER
-              value: "kafka:9092"
-            
+              value: kafka:9092
