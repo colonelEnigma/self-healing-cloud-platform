@@ -1,5 +1,6 @@
 const kafka = require("./client");
 const pool = require("../config/db");
+
 const {
   kafkaMessagesConsumed,
   kafkaProcessingDuration,
