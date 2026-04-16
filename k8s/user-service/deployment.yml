@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: user-service
+  template:
+    metadata:
+      labels:
+        app: user-service
+    spec:
+      containers:
+        - name: user-service
+          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/user-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+          env:
+            - name: PORT
+              value: "3000"
+
+            - name: DB_HOST
+              value: "postgres"
+
+            - name: DB_PORT
+              value: "5432"
+
+            - name: DB_USER
+              value: "admin"
+
+            - name: DB_PASSWORD
+              value: "admin"
+
+            - name: DB_NAME
+              value: "userdb"
+
+            - name: JWT_SECRET
+              value: "my_super_secret_key"
