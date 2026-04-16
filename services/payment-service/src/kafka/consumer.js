@@ -7,7 +7,7 @@ const {
   kafkaProcessingErrors,
 } = require("../metrics/metrics");
 
-const consumer = kafka.consumer({ groupId: "search-group" });
+const consumer = kafka.consumer({ groupId: "payment-group" });
 
 /**
  * Kafka connection with retry
@@ -23,7 +23,7 @@ const connectWithRetry = async () => {
       console.log("Kafka connected");
       return;
     } catch (err) {
-      console.error("Kafka connection failed, retrying...");
+      console.error("Kafka connection failed, retrying...", err.message);
       attempt++;
       await new Promise((res) => setTimeout(res, 3000));
     }
@@ -33,48 +33,39 @@ const connectWithRetry = async () => {
 };
 
 /**
- * Business logic (indexing)
+ * Business logic for payment-service
  */
-const processEvent = async (data, io) => {
-  console.log("🔍 Search received:", data);
+const processEvent = async (data) => {
+  console.log("💳 Payment received event:", data);
 
   const { eventType, orderId, userId, totalAmount } = data;
 
-  // ✅ only handle correct event
+  // only process order created events
   if (eventType !== "ORDER_CREATED") {
     console.log("⏭ Ignoring event:", eventType);
     return;
   }
 
-  if (!orderId) {
+  if (!orderId || !userId || totalAmount == null) {
     throw new Error("Invalid event payload");
   }
 
-  // 📦 Index into search table
+  // simulate successful payment entry
   await pool.query(
-    `INSERT INTO orders_search (order_id, user_id, total_amount)
-     VALUES ($1, $2, $3)
+    `INSERT INTO payments (order_id, user_id, amount, status)
+     VALUES ($1, $2, $3, $4)
      ON CONFLICT (order_id) DO NOTHING`,
-    [orderId, userId, totalAmount]
+    [orderId, userId, totalAmount, "SUCCESS"]
   );
 
-  // ⚡ realtime update (if socket enabled)
-  if (io) {
-    io.emit("order_created", {
-      orderId,
-      userId,
-      totalAmount,
-    });
-  }
-
-  console.log(`📌 Order indexed in search: ${orderId}`);
+  console.log(`✅ Payment recorded for order: ${orderId}`);
 };
 
 /**
- * Start consumer (clean + stable)
+ * Start consumer
  */
-const startConsumer = async (io) => {
-  // small startup buffer (k8s safe)
+const startConsumer = async () => {
+  // small startup buffer for k8s
   await new Promise((res) => setTimeout(res, 3000));
 
   await connectWithRetry();
@@ -85,7 +76,7 @@ const startConsumer = async (io) => {
       fromBeginning: false,
     });
 
-    console.log("🔎 Search consumer subscribed to order_created");
+    console.log("💳 Payment consumer subscribed to order_created");
 
     await consumer.run({
       eachMessage: async ({ message }) => {
@@ -94,12 +85,12 @@ const startConsumer = async (io) => {
         try {
           const data = JSON.parse(message.value.toString());
 
-          await processEvent(data, io);
+          await processEvent(data);
 
           kafkaMessagesConsumed.inc();
         } catch (err) {
           kafkaProcessingErrors.inc();
-          console.error("❌ Search consumer error:", err.message);
+          console.error("❌ Payment consumer error:", err.message);
         } finally {
           const duration = (Date.now() - start) / 1000;
           kafkaProcessingDuration.observe(duration);
@@ -107,7 +98,7 @@ const startConsumer = async (io) => {
       },
     });
 
-    console.log("🚀 Search consumer running");
+    console.log("🚀 Payment consumer running");
   } catch (err) {
     console.error("❌ Kafka consumer failed:", err.message);
   }

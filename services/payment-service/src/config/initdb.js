@@ -13,6 +13,7 @@ const initDb = async () => {
         CREATE TABLE IF NOT EXISTS payments (
           id SERIAL PRIMARY KEY,
           order_id INTEGER NOT NULL UNIQUE,
+          user_id VARCHAR(255) NOT NULL,
           amount NUMERIC(10,2) NOT NULL,
           status VARCHAR(50) DEFAULT 'pending',
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
