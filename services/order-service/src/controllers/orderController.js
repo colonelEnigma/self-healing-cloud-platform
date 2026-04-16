@@ -93,12 +93,12 @@ exports.createOrder = async (req, res) => {
 
     // publish event
     await sendMessage("order_created", {
-      event: "order_created",
+      eventType: "ORDER_CREATED",
       orderId: order.id,
-      user_id: order.user_id,
-      total_amount: totalAmount,
+      totalAmount: totalAmount,
+      userId: order.user_id,
       status: order.status,
-      created_at: order.created_at,
+      createdAt: order.created_at,
       items,
     });
 

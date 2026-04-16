@@ -6,74 +6,110 @@ const {
   kafkaProcessingErrors,
 } = require("../metrics/metrics");
 
-const consumer = kafka.consumer({ groupId: "payment-group" });
+const consumer = kafka.consumer({ groupId: "search-group" });
 
 /**
- * Handles the business logic for processing an incoming Kafka event.
+ * Kafka connection with retry
  */
-const processEvent = async (data, pool) => {
-  console.log("Received event:", data);
+const connectWithRetry = async () => {
+  const maxRetries = 10;
+  let attempt = 0;
 
-  const { orderId, total_amount } = data;
+  while (attempt < maxRetries) {
+    try {
+      console.log(`Kafka connect attempt ${attempt + 1}`);
+      await consumer.connect();
+      console.log("Kafka connected");
+      return;
+    } catch (err) {
+      console.error("Kafka connection failed, retrying...");
+      attempt++;
+      await new Promise((res) => setTimeout(res, 3000));
+    }
+  }
 
-  // 🔥 Auto create payment
-  await pool.query(
-    `INSERT INTO payments (order_id, amount, status)
-     VALUES ($1, $2, $3)
-     ON CONFLICT (order_id) DO NOTHING`,
-    [orderId, total_amount, "success"],
-  );
-
-  console.log(`Payment created for order: ${orderId}`);
+  throw new Error("Kafka connection failed after retries");
 };
 
-const startConsumer = async () => {
-  const connectWithRetry = async () => {
-    const maxRetries = 10;
-    let attempt = 0;
+/**
+ * Business logic (indexing)
+ */
+const processEvent = async (data, io) => {
+  console.log("🔍 Search received:", data);
 
-    while (attempt < maxRetries) {
-      try {
-        console.log(`Kafka connect attempt ${attempt + 1}`);
-        await consumer.connect();
-        console.log("Kafka connected");
-        return;
-      } catch (err) {
-        console.error("Kafka connection failed, retrying...");
-        attempt++;
-        await new Promise((res) => setTimeout(res, 3000)); // wait 3 sec
-      }
-    }
+  const { eventType, orderId, userId, totalAmount } = data;
 
-    throw new Error("Kafka connection failed after retries");
-  };
+  // ✅ only handle correct event
+  if (eventType !== "ORDER_CREATED") {
+    console.log("⏭ Ignoring event:", eventType);
+    return;
+  }
+
+  if (!orderId) {
+    throw new Error("Invalid event payload");
+  }
+
+  // 📦 Index into search table
+  await pool.query(
+    `INSERT INTO orders_search (order_id, user_id, total_amount)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (order_id) DO NOTHING`,
+    [orderId, userId, totalAmount]
+  );
+
+  // ⚡ realtime update (if socket enabled)
+  if (io) {
+    io.emit("order_created", {
+      orderId,
+      userId,
+      totalAmount,
+    });
+  }
+
+  console.log(`📌 Order indexed in search: ${orderId}`);
+};
+
+/**
+ * Start consumer (clean + stable)
+ */
+const startConsumer = async (io) => {
+  // small startup buffer (k8s safe)
+  await new Promise((res) => setTimeout(res, 3000));
 
   await connectWithRetry();
 
-  await consumer.subscribe({ topic: "order_created", fromBeginning: true });
+  try {
+    await consumer.subscribe({
+      topic: "order_created",
+      fromBeginning: false,
+    });
 
-  console.log("Payment Service Kafka Consumer running");
+    console.log("🔎 Search consumer subscribed to order_created");
 
-  await consumer.run({
-    eachMessage: async ({ topic, partition, message }) => {
-      const start = Date.now();
+    await consumer.run({
+      eachMessage: async ({ message }) => {
+        const start = Date.now();
 
-      try {
-        const data = JSON.parse(message.value.toString());
+        try {
+          const data = JSON.parse(message.value.toString());
 
-        // 👉 your existing logic now lives in processEvent
-        await processEvent(data, pool);
+          await processEvent(data, io);
 
-        kafkaMessagesConsumed.inc();
-      } catch (err) {
-        kafkaProcessingErrors.inc();
-        console.error("Payment consumer error:", err.message);
-      } finally {
-        const duration = (Date.now() - start) / 1000;
-        kafkaProcessingDuration.observe(duration);
-      }
-    },
-  });
+          kafkaMessagesConsumed.inc();
+        } catch (err) {
+          kafkaProcessingErrors.inc();
+          console.error("❌ Search consumer error:", err.message);
+        } finally {
+          const duration = (Date.now() - start) / 1000;
+          kafkaProcessingDuration.observe(duration);
+        }
+      },
+    });
+
+    console.log("🚀 Search consumer running");
+  } catch (err) {
+    console.error("❌ Kafka consumer failed:", err.message);
+  }
 };
 
 module.exports = startConsumer;

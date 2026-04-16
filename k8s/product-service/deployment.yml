@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: product-service
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: product-service
@@ -14,16 +14,27 @@ spec:
     spec:
       containers:
         - name: product-service
-          image: self-healing-cloud-platform-product-service:latest
-          imagePullPolicy: Never
+          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/product-service:latest
           ports:
             - containerPort: 3005
           env:
+            - name: PORT
+              value: "3005"
+
             - name: DB_HOST
-              value: "postgres"
+              value: postgres-postgresql
+
+            - name: DB_PORT
+              value: "5432"
+
             - name: DB_USER
-              value: "admin"
+              value: admin
+
             - name: DB_PASSWORD
-              value: "admin"
+              value: admin
+
             - name: DB_NAME
-              value: "productsdb"
+              value: userdb
+
+            - name: KAFKA_BROKER
+              value: kafka:9092
