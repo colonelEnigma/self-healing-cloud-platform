@@ -18,6 +18,9 @@ spec:
         - name: postgres
           image: postgres:15
 
+          ports:
+            - containerPort: 5432
+
           env:
             - name: POSTGRES_USER
               value: admin
@@ -25,18 +28,19 @@ spec:
             - name: POSTGRES_PASSWORD
               value: admin
 
-            # ⚠️ IMPORTANT: default DB (only bootstrap DB)
+            # bootstrap DB only (init.sql creates others)
             - name: POSTGRES_DB
               value: postgres
-
-          ports:
-            - containerPort: 5432
 
           volumeMounts:
             - name: initdb
               mountPath: /docker-entrypoint-initdb.d
 
-          # ✅ basic health check (important for DB stability)
+            # ✅ IMPORTANT: data persistence (ephemeral for now)
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+
+          # ✅ Readiness check
           readinessProbe:
             exec:
               command:
@@ -46,6 +50,7 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 5
 
+          # ✅ Liveness check
           livenessProbe:
             exec:
               command:
@@ -55,7 +60,19 @@ spec:
             initialDelaySeconds: 20
             periodSeconds: 10
 
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
       volumes:
         - name: initdb
           configMap:
             name: postgres-initdb
+
+        # ⚠️ NOTE: replace with PVC in production
+        - name: postgres-data
+          emptyDir: {}
