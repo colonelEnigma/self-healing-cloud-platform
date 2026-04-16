@@ -1,6 +1,11 @@
 const kafka = require("./client");
 
-const producer = kafka.producer();
+let producer;
+
+if (kafka) {
+  producer = kafka.producer();
+  producer.connect().catch(console.error);
+}
 
 const connectProducer = async () => {
   const connectWithRetry = async () => {

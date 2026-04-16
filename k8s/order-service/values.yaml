@@ -1,0 +1,22 @@
+replicaCount: 2
+
+image:
+  repository: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/order-service
+  tag: latest
+  pullPolicy: Always
+
+service:
+  type: ClusterIP
+  port: 3003
+  nodePort: 30007
+
+env:
+  PORT: "3003"
+  DB_HOST: postgres-postgresql
+  DB_PORT: "5432"
+  DB_USER: admin
+  DB_PASSWORD: admin
+  DB_NAME: userdb
+  JWT_SECRET: my_super_secret_key
+  KAFKA_BROKER: kafka:9092
+  PRODUCT_SERVICE_URL: http://product-service:3005

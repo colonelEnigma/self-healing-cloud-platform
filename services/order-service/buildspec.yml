@@ -10,18 +10,18 @@ phases:
     commands:
       - echo "Starting PRE_BUILD..."
 
-      # Get AWS account ID (reliable method)
+      # Get AWS account ID
       - ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
-      # Debug (IMPORTANT)
+      # Validate AWS identity
       - echo "ACCOUNT_ID=$ACCOUNT_ID"
       - echo "REGION=$REGION"
 
-      # Build ECR registry (ROOT ONLY - NO repo here)
+      # Build full registry URL
       - REGISTRY="$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com"
       - echo "REGISTRY=$REGISTRY"
 
-      # Login to ECR (THIS IS THE CORRECT FORM)
+      # Login to ECR (must be done before docker build cache issues)
       - aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $REGISTRY
 
       - echo "ECR login completed"
@@ -30,8 +30,11 @@ phases:
     commands:
       - echo "Build phase started..."
 
-      # Build Docker image
-      - docker build -t $REPO_NAME ./services/order-service
+      # IMPORTANT: always build from service root context
+      - cd services/order-service
+
+      # Build image
+      - docker build -t $REPO_NAME:latest .
 
       # Tag image for ECR
       - docker tag $REPO_NAME:latest $REGISTRY/$REPO_NAME:latest
@@ -40,8 +43,14 @@ phases:
     commands:
       - echo "Pushing image to ECR..."
 
-      # Push to ECR
+      # Push image
       - docker push $REGISTRY/$REPO_NAME:latest
+
+      # Kubernetes deployment trigger artifact (IMPORTANT for EKS automation)
+      - printf '[{"name":"order-service","imageUri":"%s"}]' $REGISTRY/$REPO_NAME:latest > imagedefinitions.json
 
       - echo "Build completed successfully!"
 
+artifacts:
+  files:
+    - imagedefinitions.json
