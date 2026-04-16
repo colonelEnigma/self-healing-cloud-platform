@@ -5,7 +5,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "1"
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: postgres
@@ -28,7 +28,6 @@ spec:
             - name: POSTGRES_PASSWORD
               value: admin
 
-            # bootstrap DB only (init.sql creates others)
             - name: POSTGRES_DB
               value: postgres
 
@@ -36,11 +35,9 @@ spec:
             - name: initdb
               mountPath: /docker-entrypoint-initdb.d
 
-            # ✅ IMPORTANT: data persistence (ephemeral for now)
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
 
-          # ✅ Readiness check
           readinessProbe:
             exec:
               command:
@@ -50,7 +47,6 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 5
 
-          # ✅ Liveness check
           livenessProbe:
             exec:
               command:
@@ -73,6 +69,5 @@ spec:
           configMap:
             name: postgres-initdb
 
-        # ⚠️ NOTE: replace with PVC in production
         - name: postgres-data
           emptyDir: {}
