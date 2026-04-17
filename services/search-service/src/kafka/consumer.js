@@ -37,13 +37,13 @@ const connectWithRetry = async () => {
 const processEvent = async (data, io) => {
   console.log("Search received:", data);
 
-  const { orderId, user_id, total_amount } = data;
+  const { orderId, userId, totalAmount } = data;
 
   await pool.query(
     `INSERT INTO orders_search (order_id, user_id, total_amount)
      VALUES ($1, $2, $3)
      ON CONFLICT (order_id) DO NOTHING`,
-    [orderId, user_id, total_amount],
+    [orderId, userId, totalAmount],
   );
 
   io.emit("order_created", {
