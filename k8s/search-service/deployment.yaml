@@ -16,6 +16,13 @@ spec:
         - name: search-service
           image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/search-service:latest
           imagePullPolicy: Always
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
 
           ports:
             - containerPort: 5003

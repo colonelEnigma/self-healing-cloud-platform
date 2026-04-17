@@ -87,3 +87,12 @@ AI Services
 8. Self-Healing Automation
 9. CI/CD Automation
 10. Chaos Testing & Scaling
+
+
+## Databases
+
+1. user-service → userdb
+2. order-service → orderdb
+3. payment-service → paymentdb
+4. product-service → productdb
+5. search-service → searchdb

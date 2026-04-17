@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: order-service
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: order-service
@@ -16,6 +16,13 @@ spec:
         - name: order-service
           image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/order-service:latest
           imagePullPolicy: Always
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
           ports:
             - containerPort: 3003
           env:
