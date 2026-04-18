@@ -4,16 +4,21 @@ const {
   kafkaMessagesConsumed,
   kafkaProcessingDuration,
   kafkaProcessingErrors,
+  kafkaRetryAttempts,
+  kafkaDlqMessages,
 } = require("../metrics/metrics");
 
 const consumer = kafka.consumer({ groupId: "search-group" });
 const producer = kafka.producer();
+
+const SERVICE_NAME = "search-service";
 
 const retry = async (fn, retries = 3, delay = 2000) => {
   for (let i = 0; i < retries; i++) {
     try {
       return await fn();
     } catch (err) {
+      kafkaRetryAttempts.inc({ service: SERVICE_NAME });
       console.error(`🔁 Retry ${i + 1} failed:`, err.message);
 
       if (i === retries - 1) throw err;
@@ -86,6 +91,7 @@ const processEvent = async (data, io) => {
  * Send to DLQ
  */
 const sendToDLQ = async (data, error) => {
+  kafkaDlqMessages.inc({ service: SERVICE_NAME });
   console.error("☠️ Sending search event to DLQ:", error.message);
 
   await producer.send({

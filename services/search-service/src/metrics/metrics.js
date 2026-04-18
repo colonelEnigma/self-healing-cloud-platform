@@ -25,10 +25,26 @@ const kafkaProcessingErrors = new client.Counter({
   help: "Total Kafka processing errors",
 });
 
+// retry attempts
+const kafkaRetryAttempts = new client.Counter({
+  name: "kafka_retry_attempts_total",
+  help: "Total number of Kafka retry attempts",
+  labelNames: ["service"],
+});
+
+// DLQ messages
+const kafkaDlqMessages = new client.Counter({
+  name: "kafka_dlq_messages_total",
+  help: "Total number of messages sent to DLQ",
+  labelNames: ["service"],
+});
+
 module.exports = {
   client,
   httpRequestDuration,
   kafkaMessagesConsumed,
   kafkaProcessingDuration,
   kafkaProcessingErrors,
+  kafkaRetryAttempts,
+  kafkaDlqMessages,
 };

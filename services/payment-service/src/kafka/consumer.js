@@ -5,12 +5,14 @@ const {
   kafkaMessagesConsumed,
   kafkaProcessingDuration,
   kafkaProcessingErrors,
+  kafkaRetryAttempts,
+  kafkaDlqMessages,
 } = require("../metrics/metrics");
 
 const consumer = kafka.consumer({ groupId: "payment-group" });
-
-// ✅ NEW: DLQ producer
 const producer = kafka.producer();
+
+const SERVICE_NAME = "payment-service";
 
 /**
  * Retry helper
@@ -20,6 +22,7 @@ const retry = async (fn, retries = 3, delay = 2000) => {
     try {
       return await fn();
     } catch (err) {
+      kafkaRetryAttempts.inc({ service: SERVICE_NAME });
       console.error(`🔁 Retry ${i + 1} failed:`, err.message);
 
       if (i === retries - 1) throw err;
@@ -40,7 +43,7 @@ const connectWithRetry = async () => {
     try {
       console.log(`Kafka connect attempt ${attempt + 1}`);
       await consumer.connect();
-      await producer.connect(); // ✅ connect producer too
+      await producer.connect();
       console.log("Kafka connected");
       return;
     } catch (err) {
@@ -61,13 +64,11 @@ const processEvent = async (data) => {
 
   const { eventType, orderId, userId, totalAmount } = data;
 
-  // only process order created events
   if (eventType !== "ORDER_CREATED") {
     console.log("⏭ Ignoring event:", eventType);
     return;
   }
 
-  // ✅ validation
   if (!orderId || !userId || totalAmount == null) {
     throw new Error("Invalid event payload");
   }
@@ -86,6 +87,7 @@ const processEvent = async (data) => {
  * Send to DLQ
  */
 const sendToDLQ = async (data, error) => {
+  kafkaDlqMessages.inc({ service: SERVICE_NAME });
   console.error("☠️ Sending event to DLQ:", error.message);
 
   await producer.send({
@@ -93,6 +95,7 @@ const sendToDLQ = async (data, error) => {
     messages: [
       {
         value: JSON.stringify({
+          source: SERVICE_NAME,
           originalEvent: data,
           error: error.message,
           failedAt: new Date().toISOString(),
@@ -126,7 +129,6 @@ const startConsumer = async () => {
         try {
           data = JSON.parse(message.value.toString());
 
-          // ✅ retry wrapper
           await retry(() => processEvent(data));
 
           kafkaMessagesConsumed.inc();
@@ -134,7 +136,6 @@ const startConsumer = async () => {
           kafkaProcessingErrors.inc();
           console.error("❌ Payment consumer error:", err.message);
 
-          // ✅ send to DLQ after retries fail
           if (data) {
             await sendToDLQ(data, err);
           }
