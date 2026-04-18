@@ -64,4 +64,7 @@ jobs:
             ${{ env.CONTAINER_NAME }}=$REGISTRY/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} \
             -n ${{ env.K8S_NAMESPACE }}
 
+      - name: Restart deployment
+        run: |
+          kubectl rollout restart deployment/${{ env.DEPLOYMENT_NAME }} -n ${{ env.K8S_NAMESPACE }}
           kubectl rollout status deployment/${{ env.DEPLOYMENT_NAME }} -n ${{ env.K8S_NAMESPACE }}
