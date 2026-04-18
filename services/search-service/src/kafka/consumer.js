@@ -48,8 +48,8 @@ const processEvent = async (data, io) => {
 
   io.emit("order_created", {
     id: orderId,
-    user_id,
-    total_amount,
+    user_id: userId,
+    total_amount: totalAmount,
   });
 
   console.log(`Order indexed: ${orderId}`);
