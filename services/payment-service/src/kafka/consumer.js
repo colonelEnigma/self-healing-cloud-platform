@@ -9,6 +9,26 @@ const {
 
 const consumer = kafka.consumer({ groupId: "payment-group" });
 
+// ✅ NEW: DLQ producer
+const producer = kafka.producer();
+
+/**
+ * Retry helper
+ */
+const retry = async (fn, retries = 3, delay = 2000) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      console.error(`🔁 Retry ${i + 1} failed:`, err.message);
+
+      if (i === retries - 1) throw err;
+
+      await new Promise((res) => setTimeout(res, delay));
+    }
+  }
+};
+
 /**
  * Kafka connection with retry
  */
@@ -20,6 +40,7 @@ const connectWithRetry = async () => {
     try {
       console.log(`Kafka connect attempt ${attempt + 1}`);
       await consumer.connect();
+      await producer.connect(); // ✅ connect producer too
       console.log("Kafka connected");
       return;
     } catch (err) {
@@ -33,7 +54,7 @@ const connectWithRetry = async () => {
 };
 
 /**
- * Business logic for payment-service
+ * Business logic
  */
 const processEvent = async (data) => {
   console.log("💳 Payment received event:", data);
@@ -46,11 +67,11 @@ const processEvent = async (data) => {
     return;
   }
 
+  // ✅ validation
   if (!orderId || !userId || totalAmount == null) {
     throw new Error("Invalid event payload");
   }
 
-  // simulate successful payment entry
   await pool.query(
     `INSERT INTO payments (order_id, user_id, amount, status)
      VALUES ($1, $2, $3, $4)
@@ -62,10 +83,29 @@ const processEvent = async (data) => {
 };
 
 /**
+ * Send to DLQ
+ */
+const sendToDLQ = async (data, error) => {
+  console.error("☠️ Sending event to DLQ:", error.message);
+
+  await producer.send({
+    topic: "order_created_dlq",
+    messages: [
+      {
+        value: JSON.stringify({
+          originalEvent: data,
+          error: error.message,
+          failedAt: new Date().toISOString(),
+        }),
+      },
+    ],
+  });
+};
+
+/**
  * Start consumer
  */
 const startConsumer = async () => {
-  // small startup buffer for k8s
   await new Promise((res) => setTimeout(res, 3000));
 
   await connectWithRetry();
@@ -81,16 +121,23 @@ const startConsumer = async () => {
     await consumer.run({
       eachMessage: async ({ message }) => {
         const start = Date.now();
+        let data;
 
         try {
-          const data = JSON.parse(message.value.toString());
+          data = JSON.parse(message.value.toString());
 
-          await processEvent(data);
+          // ✅ retry wrapper
+          await retry(() => processEvent(data));
 
           kafkaMessagesConsumed.inc();
         } catch (err) {
           kafkaProcessingErrors.inc();
           console.error("❌ Payment consumer error:", err.message);
+
+          // ✅ send to DLQ after retries fail
+          if (data) {
+            await sendToDLQ(data, err);
+          }
         } finally {
           const duration = (Date.now() - start) / 1000;
           kafkaProcessingDuration.observe(duration);
