@@ -1,0 +1,54 @@
+server:
+  persistentVolume:
+    enabled: true
+    storageClass: gp2
+    size: 20Gi
+
+scrapeConfigs: null
+
+serverFiles:
+  prometheus.yml:
+    scrape_configs:
+      - job_name: prometheus
+        static_configs:
+          - targets:
+              - localhost:9090
+
+      - job_name: payment-service
+        metrics_path: /metrics
+        static_configs:
+          - targets:
+              - payment-service:4000
+
+      - job_name: search-service
+        metrics_path: /metrics
+        static_configs:
+          - targets:
+              - search-service:5003
+
+      - job_name: product-service
+        metrics_path: /metrics
+        static_configs:
+          - targets:
+              - product-service:3005
+
+      - job_name: order-service
+        metrics_path: /metrics
+        static_configs:
+          - targets:
+              - order-service:3003
+
+      - job_name: user-service
+        metrics_path: /metrics
+        static_configs:
+          - targets:
+              - user-service:3000
+
+alertmanager:
+  persistentVolume:
+    enabled: true
+    storageClass: gp2
+    size: 5Gi
+
+pushgateway:
+  enabled: false
