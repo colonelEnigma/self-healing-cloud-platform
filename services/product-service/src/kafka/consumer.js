@@ -1,5 +1,13 @@
 const { Kafka } = require("kafkajs");
 
+const {
+  kafkaMessagesConsumed,
+  kafkaProcessingDuration,
+  kafkaProcessingErrors,
+  kafkaRetryAttempts,
+  kafkaDlqMessages,
+} = require("../metrics/metrics");
+
 const kafka = new Kafka({
   clientId: "product-service",
   brokers: [process.env.KAFKA_BROKER || "kafka:9092"],
@@ -7,6 +15,8 @@ const kafka = new Kafka({
 
 const consumer = kafka.consumer({ groupId: "product-service-group" });
 const producer = kafka.producer();
+
+const SERVICE_NAME = "product-service";
 
 /**
  * Retry helper
@@ -16,6 +26,7 @@ const retry = async (fn, retries = 3, delay = 2000) => {
     try {
       return await fn();
     } catch (err) {
+      kafkaRetryAttempts.inc({ service: SERVICE_NAME });
       console.error(`🔁 Retry ${i + 1} failed:`, err.message);
 
       if (i === retries - 1) throw err;
@@ -81,6 +92,7 @@ const processEvent = async (event) => {
  * Send to DLQ
  */
 const sendToDLQ = async (event, error) => {
+  kafkaDlqMessages.inc({ service: SERVICE_NAME });
   console.error("☠️ Sending product event to DLQ:", error.message);
 
   await producer.send({
@@ -119,13 +131,18 @@ const runConsumer = async () => {
         event = JSON.parse(message.value.toString());
 
         await retry(() => processEvent(event));
+        kafkaMessagesConsumed.inc();
       } catch (err) {
+        kafkaProcessingErrors.inc();
         console.error("❌ Product consumer error:", err.message);
 
         if (event) {
           await sendToDLQ(event, err);
         }
-      }
+      } finally {
+          const duration = (Date.now() - start) / 1000;
+          kafkaProcessingDuration.observe(duration);
+        }
     },
   });
 };
