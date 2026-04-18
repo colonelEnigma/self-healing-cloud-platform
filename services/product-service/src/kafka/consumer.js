@@ -6,25 +6,125 @@ const kafka = new Kafka({
 });
 
 const consumer = kafka.consumer({ groupId: "product-service-group" });
+const producer = kafka.producer();
 
+/**
+ * Retry helper
+ */
+const retry = async (fn, retries = 3, delay = 2000) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      console.error(`🔁 Retry ${i + 1} failed:`, err.message);
+
+      if (i === retries - 1) throw err;
+
+      await new Promise((res) => setTimeout(res, delay));
+    }
+  }
+};
+
+/**
+ * Connect Kafka
+ */
+const connectWithRetry = async () => {
+  let retries = 10;
+
+  while (retries) {
+    try {
+      await consumer.connect();
+      await producer.connect();
+      console.log("Kafka connected");
+      return;
+    } catch (err) {
+      console.error("Kafka connection failed, retrying...");
+      retries--;
+      await new Promise((res) => setTimeout(res, 3000));
+    }
+  }
+
+  throw new Error("Kafka connection failed");
+};
+
+/**
+ * Business logic
+ */
+const processEvent = async (event) => {
+  console.log("📩 Event received:", event);
+
+  if (event.eventType !== "ORDER_CREATED") {
+    console.log("⏭ Ignoring event:", event.eventType);
+    return;
+  }
+
+  if (!event.items || !Array.isArray(event.items)) {
+    throw new Error("Invalid event payload: items missing");
+  }
+
+  for (const item of event.items) {
+    const { product_id, quantity } = item;
+
+    if (!product_id || !quantity) {
+      throw new Error("Invalid item payload");
+    }
+
+    console.log(
+      `📉 Reduce stock for product=${product_id}, qty=${quantity}`
+    );
+
+    // TODO: DB update logic later
+  }
+};
+
+/**
+ * Send to DLQ
+ */
+const sendToDLQ = async (event, error) => {
+  console.error("☠️ Sending product event to DLQ:", error.message);
+
+  await producer.send({
+    topic: "order_created_dlq",
+    messages: [
+      {
+        value: JSON.stringify({
+          source: "product-service",
+          originalEvent: event,
+          error: error.message,
+          failedAt: new Date().toISOString(),
+        }),
+      },
+    ],
+  });
+};
+
+/**
+ * Start consumer
+ */
 const runConsumer = async () => {
-  await consumer.connect();
-  await consumer.subscribe({ topic: "order_created", fromBeginning: false });
+  await connectWithRetry();
+
+  await consumer.subscribe({
+    topic: "order_created",
+    fromBeginning: false,
+  });
 
   console.log("📦 Product-service Kafka consumer started");
 
   await consumer.run({
     eachMessage: async ({ message }) => {
-      const event = JSON.parse(message.value.toString());
+      let event;
 
-      console.log("📩 Event received:", event);
+      try {
+        event = JSON.parse(message.value.toString());
 
-      if (event.eventType === "ORDER_CREATED") {
-        console.log(
-          `📉 Reduce stock for product=${event.productId}, qty=${event.quantity}`
-        );
+        await retry(() => processEvent(event));
+      } catch (err) {
+        console.error("❌ Product consumer error:", err.message);
 
-        // TODO: DB update logic (you can implement later)
+        if (event) {
+          await sendToDLQ(event, err);
+        }
       }
     },
   });
