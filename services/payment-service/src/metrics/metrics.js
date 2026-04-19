@@ -39,6 +39,13 @@ const kafkaDlqMessages = new client.Counter({
   labelNames: ["service"],
 });
 
+// HTTP requests counter
+const httpRequestCounter = new client.Counter({
+  name: 'http_requests_total',
+  help: 'Total HTTP requests',
+  labelNames: ['method', 'route', 'status']
+});
+
 module.exports = {
   client,
   httpRequestDuration,
@@ -47,4 +54,5 @@ module.exports = {
   kafkaProcessingErrors,
   kafkaRetryAttempts,
   kafkaDlqMessages,
+  httpRequestCounter,
 };
