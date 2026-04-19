@@ -38,6 +38,11 @@ app.get("/metrics", async (req, res) => {
 
 const PORT = process.env.PORT || 3003;
 
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "order-service is running" });
+});
+
+
 const startServer = async () => {
   try {
     await initDb(); // ✅ wait for table creation
