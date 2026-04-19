@@ -4,10 +4,16 @@ server:
     storageClass: gp2
     size: 20Gi
 
+  service:
+    type: LoadBalancer
+
 scrapeConfigs: null
 
 serverFiles:
   prometheus.yml:
+    rule_files:
+      - /etc/config/alerting_rules.yml
+
     scrape_configs:
       - job_name: prometheus
         static_configs:
@@ -44,11 +50,63 @@ serverFiles:
           - targets:
               - user-service:3000
 
+  alerting_rules.yml:
+    groups:
+      - name: platform-alerts
+        rules:
+          - alert: ServiceDown
+            expr: up{job=~"payment-service|search-service|order-service|user-service|product-service"} == 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Service is down"
+              description: "{{ $labels.job }} is down"
+
+          - alert: KafkaProcessingErrorsHigh
+            expr: increase(kafka_processing_errors_total[2m]) > 0
+            for: 1m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Kafka processing errors detected"
+              description: "Kafka processing errors detected for job {{ $labels.job }}"
+
+          - alert: KafkaDLQMessagesDetected
+            expr: increase(kafka_dlq_messages_total[2m]) > 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "DLQ messages detected"
+              description: "DLQ messages detected for job {{ $labels.job }}"
+
+          - alert: HighKafkaProcessingLatency
+            expr: (rate(kafka_processing_duration_seconds_sum[2m]) / rate(kafka_processing_duration_seconds_count[2m])) > 2
+            for: 1m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High Kafka processing latency"
+              description: "Average Kafka processing latency is above 2 seconds for job {{ $labels.job }}"
+
 alertmanager:
+  enabled: true
+
   persistentVolume:
     enabled: true
     storageClass: gp2
     size: 5Gi
+
+  config:
+    global: {}
+    route:
+      receiver: default-receiver
+      group_wait: 10s
+      group_interval: 30s
+      repeat_interval: 1h
+    receivers:
+      - name: default-receiver
 
 pushgateway:
   enabled: false

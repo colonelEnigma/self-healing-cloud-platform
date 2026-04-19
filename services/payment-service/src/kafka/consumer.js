@@ -73,6 +73,11 @@ const processEvent = async (data) => {
     throw new Error("Invalid event payload");
   }
 
+  // TEMP TEST
+  if (orderId) {
+    throw new Error("DLQ test error");
+  }
+
   await pool.query(
     `INSERT INTO payments (order_id, user_id, amount, status)
      VALUES ($1, $2, $3, $4)
