@@ -16,12 +16,9 @@ app.use(
 
 app.use(express.json());
 
-// Health first
-app.get("/health", (req, res) => {
-  res.status(200).json({ status: "payment-service is running" });
-});
+// Count all normal requests, including /health and /api/*
+app.use(metricsMiddleware);
 
-// Metrics endpoint
 app.get("/metrics", async (req, res) => {
   try {
     res.set("Content-Type", client.register.contentType);
@@ -31,10 +28,10 @@ app.get("/metrics", async (req, res) => {
   }
 });
 
-// Apply metrics middleware after /health and /metrics
-app.use(metricsMiddleware);
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "payment-service is running" });
+});
 
-// API routes
 app.use("/api", paymentRoutes);
 
 module.exports = app;

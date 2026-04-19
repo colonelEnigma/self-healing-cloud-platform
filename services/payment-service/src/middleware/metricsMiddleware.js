@@ -3,24 +3,34 @@ const {
   httpRequestCounter,
 } = require("../metrics/metrics");
 
+const ignoredPaths = new Set([
+  "/metrics",
+  "/favicon.ico",
+  "/.well-known/appspecific/com.chrome.devtools.json",
+]);
+
 const metricsMiddleware = (req, res, next) => {
   const start = Date.now();
 
   res.on("finish", () => {
+    if (ignoredPaths.has(req.path)) {
+      return;
+    }
+
     const duration = (Date.now() - start) / 1000;
 
-    const route = req.route?.path || req.path || "unknown";
+    // Use originalUrl so mounted routes like /api/... are preserved
+    const route = req.originalUrl || req.path || "unknown";
+    const status = String(res.statusCode);
 
-    // ✅ Count requests
     httpRequestCounter.inc({
       method: req.method,
-      route: route,
-      status: res.statusCode,
+      route,
+      status,
     });
 
-    // ✅ Measure latency
     httpRequestDuration
-      .labels(req.method, route, res.statusCode)
+      .labels(req.method, route, status)
       .observe(duration);
   });
 
