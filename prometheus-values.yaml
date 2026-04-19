@@ -64,7 +64,7 @@ serverFiles:
               description: "{{ $labels.job }} is down"
 
           - alert: KafkaProcessingErrorsHigh
-            expr: increase(kafka_processing_errors_total[2m]) > 0
+            expr: increase(kafka_processing_errors_total[5m]) > 0
             for: 1m
             labels:
               severity: warning
@@ -73,7 +73,7 @@ serverFiles:
               description: "Kafka processing errors detected for job {{ $labels.job }}"
 
           - alert: KafkaDLQMessagesDetected
-            expr: increase(kafka_dlq_messages_total[2m]) > 0
+            expr: increase(kafka_dlq_messages_total[5m]) > 0
             for: 1m
             labels:
               severity: critical
@@ -82,7 +82,7 @@ serverFiles:
               description: "DLQ messages detected for job {{ $labels.job }}"
 
           - alert: HighKafkaProcessingLatency
-            expr: (rate(kafka_processing_duration_seconds_sum[2m]) / rate(kafka_processing_duration_seconds_count[2m])) > 2
+            expr: (rate(kafka_processing_duration_seconds_sum[5m]) / rate(kafka_processing_duration_seconds_count[5m])) > 2
             for: 1m
             labels:
               severity: warning
