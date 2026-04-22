@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: product-service
-          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/product-service:a09bff3a
+          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/product-service:926d0606
           resources:
             requests:
               cpu: "100m"
@@ -45,4 +45,4 @@ spec:
               value: productdb
 
             - name: KAFKA_BROKER
-              value: "kafka.default.svc.cluster.local:9092"
+              value: kafka.default.svc.cluster.local:9092

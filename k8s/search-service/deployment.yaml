@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: search-service
+  namespace: dev
 spec:
   replicas: 1
   selector:
@@ -14,7 +15,7 @@ spec:
     spec:
       containers:
         - name: search-service
-          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/search-service:latest
+          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/search-service:926d0606
           imagePullPolicy: Always
           resources:
             requests:
@@ -31,9 +32,8 @@ spec:
             - name: PORT
               value: "5003"
 
-            # ✅ FIXED DB HOST
             - name: DB_HOST
-              value: postgres
+              value: "postgres.default.svc.cluster.local"
 
             - name: DB_PORT
               value: "5432"
@@ -43,6 +43,7 @@ spec:
               value: admin
             - name: DB_NAME
               value: searchdb
-
             - name: KAFKA_BROKER
-              value: kafka:9092
+              value: kafka.default.svc.cluster.local:9092
+            - name: KAFKA_CONSUMER_GROUP
+              value: "search-group-dev"

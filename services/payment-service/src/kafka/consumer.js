@@ -12,7 +12,14 @@ const {
   kafkaDlqMessages,
 } = require("../metrics/metrics");
 
-const consumer = kafka.consumer({ groupId: "payment-group" });
+if (!process.env.KAFKA_CONSUMER_GROUP) {
+  throw new Error("KAFKA_CONSUMER_GROUP is not set for payment-service");
+}
+
+const consumer = kafka.consumer({
+  groupId: process.env.KAFKA_CONSUMER_GROUP,
+});
+
 const producer = kafka.producer();
 
 const SERVICE_NAME = "payment-service";

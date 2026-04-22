@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: order-service
+  namespace: dev
 spec:
   replicas: 1
   selector:
@@ -14,7 +15,7 @@ spec:
     spec:
       containers:
         - name: order-service
-          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/order-service:latest
+          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/order-service:a09bff3a
           imagePullPolicy: Always
           resources:
             requests:
@@ -30,7 +31,7 @@ spec:
               value: "3003"
 
             - name: DB_HOST
-              value: postgres
+              value: "postgres.default.svc.cluster.local"
 
             - name: DB_PORT
               value: "5432"
@@ -45,7 +46,7 @@ spec:
               value: orderdb
 
             - name: KAFKA_BROKER
-              value: kafka:9092
+              value: kafka.default.svc.cluster.local:9092
 
             - name: PRODUCT_SERVICE_URL
               value: http://product-service:3005
