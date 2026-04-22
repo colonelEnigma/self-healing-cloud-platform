@@ -1,10 +1,11 @@
 const kafka = require("./client");
 
+const ORDER_CREATED_TOPIC = process.env.ORDER_CREATED_TOPIC || "order_created";
+
 let producer;
 
 if (kafka) {
   producer = kafka.producer();
-  producer.connect().catch(console.error);
 }
 
 const connectProducer = async () => {
@@ -19,9 +20,9 @@ const connectProducer = async () => {
         console.log("Kafka connected");
         return;
       } catch (err) {
-        console.error("Kafka connection failed, retrying...");
+        console.error("Kafka connection failed, retrying...", err.message);
         attempt++;
-        await new Promise((res) => setTimeout(res, 3000)); // wait 3 sec
+        await new Promise((res) => setTimeout(res, 3000));
       }
     }
 
@@ -33,8 +34,10 @@ const connectProducer = async () => {
 
 const sendMessage = async (topic, message) => {
   try {
+    const finalTopic = topic || ORDER_CREATED_TOPIC;
+
     await producer.send({
-      topic,
+      topic: finalTopic,
       messages: [
         {
           value: JSON.stringify(message),
@@ -49,4 +52,5 @@ const sendMessage = async (topic, message) => {
 module.exports = {
   connectProducer,
   sendMessage,
+  ORDER_CREATED_TOPIC,
 };

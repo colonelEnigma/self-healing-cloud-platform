@@ -1,6 +1,7 @@
 const pool = require("../config/db");
 const { sendMessage } = require("../kafka/producer");
 const productBreaker = require("../middleware/productBreaker");
+const { ORDER_CREATED_TOPIC } = require("../kafka/producer");
 
 exports.createOrder = async (req, res) => {
   console.log("JWT_SECRET in order-service:", process.env.JWT_SECRET);
@@ -92,7 +93,7 @@ exports.createOrder = async (req, res) => {
     await client.query("COMMIT");
 
     // publish event
-    await sendMessage("order_created", {
+    await sendMessage(ORDER_CREATED_TOPIC, {
       eventType: "ORDER_CREATED",
       orderId: order.id,
       totalAmount: totalAmount,

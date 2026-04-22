@@ -1,6 +1,9 @@
 const kafka = require("./client");
 const pool = require("../config/db");
 
+const ORDER_CREATED_TOPIC = process.env.ORDER_CREATED_TOPIC || "order_created";
+const ORDER_CREATED_DLQ_TOPIC = process.env.ORDER_CREATED_DLQ_TOPIC || "order_created_dlq";
+
 const {
   kafkaMessagesConsumed,
   kafkaProcessingDuration,
@@ -73,11 +76,6 @@ const processEvent = async (data) => {
     throw new Error("Invalid event payload");
   }
 
-  // // TEMP TEST
-  // if (orderId) {
-  //   throw new Error("DLQ test error");
-  // }
-
   await pool.query(
     `INSERT INTO payments (order_id, user_id, amount, status)
      VALUES ($1, $2, $3, $4)
@@ -96,7 +94,7 @@ const sendToDLQ = async (data, error) => {
   console.error("☠️ Sending event to DLQ:", error.message);
 
   await producer.send({
-    topic: "order_created_dlq",
+    topic: ORDER_CREATED_DLQ_TOPIC,
     messages: [
       {
         value: JSON.stringify({
@@ -120,11 +118,11 @@ const startConsumer = async () => {
 
   try {
     await consumer.subscribe({
-      topic: "order_created",
+      topic: ORDER_CREATED_TOPIC,
       fromBeginning: false,
     });
 
-    console.log("💳 Payment consumer subscribed to order_created");
+    console.log("💳 Payment consumer subscribed to order_created topic");
 
     await consumer.run({
       eachMessage: async ({ message }) => {

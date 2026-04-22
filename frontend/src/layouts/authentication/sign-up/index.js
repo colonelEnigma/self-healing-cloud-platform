@@ -126,7 +126,7 @@ function Cover() {
                 Terms and Conditions
               </MDTypography>
             </MDBox>
-            <MDBox mt={4} mb={1}>
+            <MDBox mt={1} mb={1}>
               <MDButton variant="gradient" color="info" fullWidth onClick={handleSignUp}>
                 sign up
               </MDButton>

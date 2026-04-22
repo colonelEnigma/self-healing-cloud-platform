@@ -1,5 +1,8 @@
 const kafka = require("./client");
 const pool = require("../config/db");
+const ORDER_CREATED_TOPIC = process.env.ORDER_CREATED_TOPIC || "order_created";
+const ORDER_CREATED_DLQ_TOPIC = process.env.ORDER_CREATED_DLQ_TOPIC || "order_created_dlq";
+
 const {
   kafkaMessagesConsumed,
   kafkaProcessingDuration,
@@ -56,7 +59,7 @@ const connectWithRetry = async () => {
  * Business logic
  */
 const processEvent = async (data, io) => {
-  console.log("Search received:", data);
+  console.log("Search Service Search received:", data);
 
   const { eventType, orderId, userId, totalAmount } = data;
 
@@ -95,7 +98,7 @@ const sendToDLQ = async (data, error) => {
   console.error("☠️ Sending search event to DLQ:", error.message);
 
   await producer.send({
-    topic: "order_created_dlq",
+    topic: ORDER_CREATED_DLQ_TOPIC,
     messages: [
       {
         value: JSON.stringify({
@@ -124,7 +127,7 @@ const startConsumer = async (io) => {
       console.log("Subscribing to topic...");
 
       await consumer.subscribe({
-        topic: "order_created",
+        topic: ORDER_CREATED_TOPIC,
         fromBeginning: false,
       });
 

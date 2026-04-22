@@ -1,7 +1,4 @@
-version: "3.9"
-
 services:
-
   postgres:
     image: postgres:15
     container_name: postgres
@@ -9,111 +6,12 @@ services:
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin
+      POSTGRES_DB: postgres
     ports:
       - "5432:5432"
     volumes:
-      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
-
-  user-service:
-    build: ./services/user-service
-    container_name: user-service
-    ports:
-      - "3000:3000"
-    environment:
-      PORT: 3000
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: admin
-      DB_PASSWORD: admin
-      DB_NAME: userdb
-      JWT_SECRET: my_super_secret_key@$$*&^%@
-    depends_on:
-      - postgres
-
-  order-service:
-    build: ./services/order-service
-    container_name: order-service
-    ports:
-      - "3003:3003"
-    environment:
-      PORT: 3003
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: admin
-      DB_PASSWORD: admin
-      DB_NAME: orderdb
-      JWT_SECRET: my_super_secret_key@$$*&^%@
-    depends_on:
-      - postgres
-      - kafka
-
-  payment-service:
-    build: ./services/payment-service
-    container_name: payment-service
-    ports:
-      - "3004:3004"
-    environment:
-      PORT: 3004
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: admin
-      DB_PASSWORD: admin
-      DB_NAME: paymentdb
-      JWT_SECRET: my_super_secret_key@$$*&^%@
-    depends_on:
-      - postgres
-
-  search-service:
-    build: ./services/search-service
-    container_name: search-service
-    ports:
-      - "5003:5003"
-    environment:
-      PORT: 5003
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: admin
-      DB_PASSWORD: admin
-      DB_NAME: orderdb
-    depends_on:
-      - postgres
-      - kafka
-
-  product-service:
-    build: ./services/product-service
-    container_name: product-service
-    ports:
-      - "3005:3005"
-    environment:
-      PORT: 3005
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: admin
-      DB_PASSWORD: admin
-      DB_NAME: productdb
-      JWT_SECRET: my_super_secret_key@$$*&^%@
-    depends_on:
-      - postgres
-
-  # frontend:
-  #   build: ./frontend
-  #   container_name: frontend
-  #   ports:
-  #     - "3006:3000"
-  #   volumes:
-  #     - ./frontend:/app
-  #     - /app/node_modules
-  #   environment:
-  #     - HOST=0.0.0.0
-  #     - PORT=3000
-  #     - CHOKIDAR_USEPOLLING=true
-  #   depends_on:
-  #     - user-service
-  #     - order-service
-  #     - payment-service
-  #     - product-service
-  #     - search-service
-
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
@@ -134,13 +32,110 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-
-      # Internal Docker communication
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
-
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  user-service:
+    build: ./services/user-service
+    image: user-service:local
+    container_name: user-service
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: admin
+      DB_PASSWORD: admin
+      DB_NAME: userdb_local
+      JWT_SECRET: my_super_secret_key
+    depends_on:
+      - postgres
+
+  order-service:
+    build: ./services/order-service
+    image: order-service:local
+    container_name: order-service
+    ports:
+      - "3003:3003"
+    environment:
+      PORT: 3003
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: admin
+      DB_PASSWORD: admin
+      DB_NAME: orderdb_local
+      JWT_SECRET: my_super_secret_key
+      KAFKA_BROKER: kafka:9092
+      PRODUCT_SERVICE_URL: http://product-service:3005
+      ORDER_CREATED_TOPIC: order_created_local
+    depends_on:
+      - postgres
+      - kafka
+      - product-service
+
+  payment-service:
+    build: ./services/payment-service
+    image: payment-service:local
+    container_name: payment-service
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: 4000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: admin
+      DB_PASSWORD: admin
+      DB_NAME: paymentdb_local
+      JWT_SECRET: my_super_secret_key
+      KAFKA_BROKER: kafka:9092
+      ORDER_CREATED_TOPIC: order_created_local
+      ORDER_CREATED_DLQ_TOPIC: order_created_dlq_local
+    depends_on:
+      - postgres
+      - kafka
+
+  search-service:
+    build: ./services/search-service
+    image: search-service:local
+    container_name: search-service
+    ports:
+      - "5003:5003"
+    environment:
+      PORT: 5003
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: admin
+      DB_PASSWORD: admin
+      DB_NAME: searchdb_local
+      KAFKA_BROKER: kafka:9092
+      ORDER_CREATED_TOPIC: order_created_local
+      ORDER_CREATED_DLQ_TOPIC: order_created_dlq_local
+    depends_on:
+      - postgres
+      - kafka
+
+  product-service:
+    build: ./services/product-service
+    image: product-service:local
+    container_name: product-service
+    ports:
+      - "3005:3005"
+    environment:
+      PORT: 3005
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: admin
+      DB_PASSWORD: admin
+      DB_NAME: productdb_local
+      JWT_SECRET: my_super_secret_key
+      KAFKA_BROKER: kafka:9092
+      ORDER_CREATED_TOPIC: order_created_local
+      ORDER_CREATED_DLQ_TOPIC: order_created_dlq_local
+    depends_on:
+      - postgres
+      - kafka
 
   prometheus:
     image: prom/prometheus
@@ -148,16 +143,17 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml
-      - ./docker/alerts.yml:/etc/prometheus/alerts.yml
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./docker/alerts.yml:/etc/prometheus/alerts.yml:ro
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--web.enable-lifecycle"
     depends_on:
-      - search-service
-      - order-service
       - user-service
+      - order-service
       - payment-service
+      - search-service
+      - product-service
 
   grafana:
     image: grafana/grafana
@@ -173,4 +169,7 @@ services:
     ports:
       - "9093:9093"
     volumes:
-      - ./docker/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - ./docker/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+
+volumes:
+  postgres_data:

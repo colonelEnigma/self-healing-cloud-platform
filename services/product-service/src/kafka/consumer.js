@@ -1,5 +1,8 @@
 const { Kafka } = require("kafkajs");
 
+const ORDER_CREATED_TOPIC = process.env.ORDER_CREATED_TOPIC || "order_created";
+const ORDER_CREATED_DLQ_TOPIC = process.env.ORDER_CREATED_DLQ_TOPIC || "order_created_dlq";
+
 const {
   kafkaMessagesConsumed,
   kafkaProcessingDuration,
@@ -17,6 +20,7 @@ const consumer = kafka.consumer({ groupId: "product-service-group" });
 const producer = kafka.producer();
 
 const SERVICE_NAME = "product-service";
+const start = Date.now();
 
 /**
  * Retry helper
@@ -96,7 +100,7 @@ const sendToDLQ = async (event, error) => {
   console.error("☠️ Sending product event to DLQ:", error.message);
 
   await producer.send({
-    topic: "order_created_dlq",
+    topic: ORDER_CREATED_DLQ_TOPIC,
     messages: [
       {
         value: JSON.stringify({
@@ -117,7 +121,7 @@ const runConsumer = async () => {
   await connectWithRetry();
 
   await consumer.subscribe({
-    topic: "order_created",
+    topic: ORDER_CREATED_TOPIC,
     fromBeginning: false,
   });
 
