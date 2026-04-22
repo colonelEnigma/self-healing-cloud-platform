@@ -2,8 +2,9 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: product-service
+  namespace: dev
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: product-service
@@ -14,7 +15,7 @@ spec:
     spec:
       containers:
         - name: product-service
-          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/product-service:latest
+          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/product-service:a09bff3a
           resources:
             requests:
               cpu: "100m"
@@ -30,9 +31,8 @@ spec:
             - name: PORT
               value: "3005"
 
-            # ✅ FIXED
             - name: DB_HOST
-              value: postgres
+              value: "postgres.default.svc.cluster.local"
 
             - name: DB_PORT
               value: "5432"
@@ -41,9 +41,8 @@ spec:
             - name: DB_PASSWORD
               value: admin
 
-            # ⚠️ NOTE: verify this DB exists
             - name: DB_NAME
               value: productdb
 
             - name: KAFKA_BROKER
-              value: kafka:9092
+              value: "kafka.default.svc.cluster.local:9092"

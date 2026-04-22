@@ -11,10 +11,16 @@ const {
   kafkaDlqMessages,
 } = require("../metrics/metrics");
 
+
+if (!process.env.KAFKA_BROKER) {
+  throw new Error("KAFKA_BROKER is not set for product-service");
+}
+
 const kafka = new Kafka({
   clientId: "product-service",
-  brokers: [process.env.KAFKA_BROKER || "kafka:9092"],
+  brokers: [process.env.KAFKA_BROKER],
 });
+
 
 const consumer = kafka.consumer({ groupId: "product-service-group" });
 const producer = kafka.producer();

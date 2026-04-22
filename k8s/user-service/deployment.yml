@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: user-service
+  namespace: dev
 spec:
   replicas: 1
   selector:
@@ -14,7 +15,7 @@ spec:
     spec:
       containers:
         - name: user-service
-          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/user-service:latest
+          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/user-service:fc034887
           imagePullPolicy: Always
           resources:
             requests:
@@ -28,21 +29,15 @@ spec:
           env:
             - name: PORT
               value: "3000"
-
             - name: DB_HOST
-              value: "postgres"
-
+              value: "postgres.default.svc.cluster.local"
             - name: DB_PORT
               value: "5432"
-
             - name: DB_USER
               value: "admin"
-
             - name: DB_PASSWORD
               value: "admin"
-
             - name: DB_NAME
               value: "userdb"
-
             - name: JWT_SECRET
               value: "my_super_secret_key"
