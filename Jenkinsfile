@@ -17,6 +17,19 @@ pipeline {
   }
 
   stages {
+    stage('Debug Tools') {
+    steps {
+        sh '''
+        which docker || true
+        docker --version || true
+        which aws || true
+        aws --version || true
+        which kubectl || true
+        kubectl version --client || true
+        '''
+    }
+    }
+
     stage('Checkout') {
       steps {
         checkout scm
