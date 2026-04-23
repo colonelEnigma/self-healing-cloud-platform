@@ -6,21 +6,20 @@ pipeline {
 apiVersion: v1
 kind: Pod
 spec:
-  volumes:
-    - name: docker-sock
-      hostPath:
-        path: /var/run/docker.sock
   containers:
     - name: devops
       image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/jenkins-agent-devops:latest
       command:
         - cat
       tty: true
+
+    - name: buildah
+      image: quay.io/buildah/stable:latest
+      command:
+        - cat
+      tty: true
       securityContext:
-        runAsUser: 0
-      volumeMounts:
-        - name: docker-sock
-          mountPath: /var/run/docker.sock
+        privileged: true
 '''
     }
   }
@@ -41,64 +40,81 @@ spec:
   }
 
   stages {
-    stage('Debug Tools') {
-      steps {
-        sh '''
-          which docker || true
-          docker --version || true
-          which aws || true
-          aws --version || true
-          which kubectl || true
-          kubectl version --client || true
-          ls -l /var/run/docker.sock || true
-        '''
-      }
-    }
-
     stage('Prepare Git') {
       steps {
-        sh 'git config --global --add safe.directory /home/jenkins/agent/workspace/shcp-pipeline'
+        container('devops') {
+          sh 'git config --global --add safe.directory "*"'
+        }
       }
     }
 
     stage('Checkout') {
       steps {
-        checkout scm
-        script {
-          env.IMAGE_TAG = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+        container('devops') {
+          checkout scm
+          script {
+            env.IMAGE_TAG = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+          }
         }
       }
     }
 
-    stage('Build Docker Image') {
+    stage('Debug Tools') {
       steps {
-        sh """
-          docker build -t ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG} ${SERVICE_PATH}
-        """
+        container('devops') {
+          sh '''
+            git --version || true
+            aws --version || true
+            kubectl version --client || true
+          '''
+        }
+        container('buildah') {
+          sh '''
+            buildah --version || true
+          '''
+        }
       }
     }
 
-    stage('Push Docker Image') {
+    stage('Build and Push Image') {
       steps {
-        sh """
-          aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
-          docker push ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
-        """
+        container('buildah') {
+          withCredentials([
+            string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
+            string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
+          ]) {
+            sh '''
+              aws ecr get-login-password --region ${AWS_REGION} | \
+              buildah login --username AWS --password-stdin ${ECR_REGISTRY}
+
+              buildah bud \
+                -t ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG} \
+                ${SERVICE_PATH}
+
+              buildah push \
+                ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
+            '''
+          }
+        }
       }
     }
 
     stage('Update kubeconfig') {
       steps {
-        sh """
-          aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER}
-        """
+        container('devops') {
+          sh """
+            aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER}
+          """
+        }
       }
     }
 
     stage('Deploy to dev') {
       steps {
-        script {
-          deployEnv('dev')
+        container('devops') {
+          script {
+            deployEnv('dev')
+          }
         }
       }
     }
@@ -111,8 +127,10 @@ spec:
 
     stage('Deploy to test') {
       steps {
-        script {
-          deployEnv('test')
+        container('devops') {
+          script {
+            deployEnv('test')
+          }
         }
       }
     }
@@ -125,8 +143,10 @@ spec:
 
     stage('Deploy to prod') {
       steps {
-        script {
-          deployEnv('prod')
+        container('devops') {
+          script {
+            deployEnv('prod')
+          }
         }
       }
     }
