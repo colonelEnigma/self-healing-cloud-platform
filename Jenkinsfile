@@ -55,6 +55,12 @@ spec:
       }
     }
 
+    stage('Prepare Git') {
+      steps {
+        sh 'git config --global --add safe.directory /home/jenkins/agent/workspace/shcp-pipeline'
+      }
+    }
+
     stage('Checkout') {
       steps {
         checkout scm
