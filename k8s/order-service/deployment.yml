@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: order-service
-  namespace: dev
+  namespace: ${NAMESPACE}
 spec:
   replicas: 1
   selector:
@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: order-service
-          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/order-service:a09bff3a
+          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/order-service:${IMAGE_TAG}
           imagePullPolicy: Always
           resources:
             requests:
@@ -51,6 +51,11 @@ spec:
             - name: PRODUCT_SERVICE_URL
               value: http://product-service:3005
 
-            # 🔐 SECRET (TEMP SAFE WAY - NOT BEST PRACTICE YET)
             - name: JWT_SECRET
               value: my_super_secret_key
+
+            - name: ORDER_CREATED_TOPIC
+              value: "${ORDER_CREATED_TOPIC}"
+
+            - name: ORDER_CREATED_DLQ_TOPIC
+              value: "${ORDER_CREATED_DLQ_TOPIC}"

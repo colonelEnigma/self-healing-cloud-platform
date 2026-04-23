@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: search-service
-  namespace: dev
+  namespace: ${NAMESPACE}
 spec:
   replicas: 1
   selector:
@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: search-service
-          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/search-service:926d0606
+          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/search-service:${IMAGE_TAG}
           imagePullPolicy: Always
           resources:
             requests:
@@ -46,4 +46,8 @@ spec:
             - name: KAFKA_BROKER
               value: kafka.default.svc.cluster.local:9092
             - name: KAFKA_CONSUMER_GROUP
-              value: "search-group-dev"
+              value: "${KAFKA_CONSUMER_GROUP}"
+            - name: ORDER_CREATED_TOPIC
+              value: "${ORDER_CREATED_TOPIC}"
+            - name: ORDER_CREATED_DLQ_TOPIC
+              value: "${ORDER_CREATED_DLQ_TOPIC}"

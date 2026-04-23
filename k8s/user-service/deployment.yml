@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: user-service
-  namespace: dev
+  namespace: ${NAMESPACE}
 spec:
   replicas: 1
   selector:
@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: user-service
-          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/user-service:fc034887
+          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/user-service:${IMAGE_TAG}
           imagePullPolicy: Always
           resources:
             requests:

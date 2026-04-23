@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: payment-service
-  namespace: dev
+  namespace: ${NAMESPACE}
 spec:
   replicas: 1
   selector:
@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: payment-service
-          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/payment-service:926d0606
+          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/payment-service:${IMAGE_TAG}
           imagePullPolicy: Always
 
           ports:
@@ -38,7 +38,11 @@ spec:
             - name: KAFKA_BROKER
               value: kafka.default.svc.cluster.local:9092
             - name: KAFKA_CONSUMER_GROUP
-              value: "payment-group-dev"
+              value: "${KAFKA_CONSUMER_GROUP}"
+            - name: ORDER_CREATED_TOPIC
+              value: "${ORDER_CREATED_TOPIC}"
+            - name: ORDER_CREATED_DLQ_TOPIC
+              value: "${ORDER_CREATED_DLQ_TOPIC}"
 
           # ✅ HEALTH CHECKS
           readinessProbe:

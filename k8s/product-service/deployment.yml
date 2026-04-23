@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: product-service
-  namespace: dev
+  namespace: ${NAMESPACE}
 spec:
   replicas: 1
   selector:
@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: product-service
-          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/product-service:926d0606
+          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/product-service:${IMAGE_TAG}
           resources:
             requests:
               cpu: "100m"
@@ -46,3 +46,7 @@ spec:
 
             - name: KAFKA_BROKER
               value: kafka.default.svc.cluster.local:9092
+            - name: ORDER_CREATED_TOPIC
+              value: "${ORDER_CREATED_TOPIC}"
+            - name: ORDER_CREATED_DLQ_TOPIC
+              value: "${ORDER_CREATED_DLQ_TOPIC}"
