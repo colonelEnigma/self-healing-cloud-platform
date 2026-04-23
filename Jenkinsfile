@@ -121,16 +121,6 @@ spec:
         }
     }
 
-    stage('Update kubeconfig') {
-      steps {
-        container('devops') {
-          sh """
-            aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER}
-          """
-        }
-      }
-    }
-
     stage('Check RBAC') {
         steps {
             container('devops') {
