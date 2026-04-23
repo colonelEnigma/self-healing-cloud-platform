@@ -7,12 +7,46 @@ pipeline {
 
   stages {
     stage('Checkout') {
+      agent {
+        kubernetes {
+          defaultContainer 'devops'
+          yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  serviceAccountName: jenkins-deployer
+  containers:
+    - name: devops
+      image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/jenkins-agent-devops:latest
+      command:
+        - cat
+      tty: true
+'''
+        }
+      }
       steps {
         checkout scm
       }
     }
 
     stage('Detect Changed Services') {
+      agent {
+        kubernetes {
+          defaultContainer 'devops'
+          yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  serviceAccountName: jenkins-deployer
+  containers:
+    - name: devops
+      image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/jenkins-agent-devops:latest
+      command:
+        - cat
+      tty: true
+'''
+        }
+      }
       steps {
         script {
           def changedFilesRaw = sh(
@@ -80,6 +114,23 @@ pipeline {
     }
 
     stage('Run Changed Services') {
+      agent {
+        kubernetes {
+          defaultContainer 'devops'
+          yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  serviceAccountName: jenkins-deployer
+  containers:
+    - name: devops
+      image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/jenkins-agent-devops:latest
+      command:
+        - cat
+      tty: true
+'''
+        }
+      }
       steps {
         script {
           if (env.RUN_USER == 'true') {
