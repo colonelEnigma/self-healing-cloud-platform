@@ -6,12 +6,19 @@ pipeline {
 apiVersion: v1
 kind: Pod
 spec:
+  volumes:
+    - name: docker-sock
+      hostPath:
+        path: /var/run/docker.sock
   containers:
     - name: devops
       image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/jenkins-agent-devops:latest
       command:
         - cat
       tty: true
+      volumeMounts:
+        - name: docker-sock
+          mountPath: /var/run/docker.sock
 '''
     }
   }
@@ -33,16 +40,17 @@ spec:
 
   stages {
     stage('Debug Tools') {
-    steps {
+      steps {
         sh '''
-        which docker || true
-        docker --version || true
-        which aws || true
-        aws --version || true
-        which kubectl || true
-        kubectl version --client || true
+          which docker || true
+          docker --version || true
+          which aws || true
+          aws --version || true
+          which kubectl || true
+          kubectl version --client || true
+          ls -l /var/run/docker.sock || true
         '''
-    }
+      }
     }
 
     stage('Checkout') {
@@ -65,9 +73,7 @@ spec:
     stage('Push Docker Image') {
       steps {
         sh """
-          aws ecr get-login-password --region ${AWS_REGION} | \
-          docker login --username AWS --password-stdin ${ECR_REGISTRY}
-
+          aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
           docker push ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
         """
       }
@@ -121,7 +127,7 @@ spec:
 
 def deployEnv(String targetEnv) {
   def topic = ''
-  def dlq   = ''
+  def dlq = ''
 
   if (targetEnv == 'dev') {
     topic = 'order_created_dev'
