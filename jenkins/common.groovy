@@ -112,29 +112,20 @@ def deployEnv(scriptRef, Map cfg, String targetEnv, String imageTag) {
     }
   }
 
-  def deploymentCmd = """
-    sed \
-      -e 's|\\\${NAMESPACE}|${targetEnv}|g' \
-      -e 's|\\\${IMAGE_TAG}|${imageTag}|g'
-  """
+  def sedArgs = [
+    "-e 's|\\\\\${NAMESPACE}|${targetEnv}|g'",
+    "-e 's|\\\\\${IMAGE_TAG}|${imageTag}|g'"
+  ]
 
   if (cfg.kafkaAware) {
-    deploymentCmd += """
-      -e 's|\\\${ORDER_CREATED_TOPIC}|${topic}|g' \
-      -e 's|\\\${ORDER_CREATED_DLQ_TOPIC}|${dlq}|g'
-    """
+    sedArgs += "-e 's|\\\\\${ORDER_CREATED_TOPIC}|${topic}|g'"
+    sedArgs += "-e 's|\\\\\${ORDER_CREATED_DLQ_TOPIC}|${dlq}|g'"
   }
 
-  deploymentCmd += """
-      ${cfg.k8sPath}/${cfg.deploymentFile} | kubectl apply -f -
-  """
-
-  scriptRef.sh deploymentCmd
-
   scriptRef.sh """
-    sed \
-      -e 's|\\\${NAMESPACE}|${targetEnv}|g' \
-      ${cfg.k8sPath}/${cfg.serviceFile} | kubectl apply -f -
+    sed ${sedArgs.join(' ')} ${cfg.k8sPath}/${cfg.deploymentFile} | kubectl apply -f -
+
+    sed -e 's|\\\\\${NAMESPACE}|${targetEnv}|g' ${cfg.k8sPath}/${cfg.serviceFile} | kubectl apply -f -
 
     kubectl rollout status deployment/${cfg.serviceName} -n ${targetEnv}
   """
