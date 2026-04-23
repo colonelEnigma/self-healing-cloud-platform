@@ -6,6 +6,7 @@ pipeline {
 apiVersion: v1
 kind: Pod
 spec:
+  serviceAccountName: jenkins-deployer
   volumes:
     - name: shared-auth
       emptyDir: {}
@@ -128,6 +129,19 @@ spec:
           """
         }
       }
+    }
+
+    stage('Check RBAC') {
+        steps {
+            container('devops') {
+            sh '''
+                kubectl auth can-i get deployments -n dev
+                kubectl auth can-i patch deployments -n dev
+                kubectl auth can-i get deployments -n test
+                kubectl auth can-i patch deployments -n test
+            '''
+            }
+        }
     }
 
     stage('Deploy to dev') {
