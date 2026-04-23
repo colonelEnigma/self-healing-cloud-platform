@@ -6,12 +6,18 @@ pipeline {
 apiVersion: v1
 kind: Pod
 spec:
+  volumes:
+    - name: shared-auth
+      emptyDir: {}
   containers:
     - name: devops
       image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/jenkins-agent-devops:latest
       command:
         - cat
       tty: true
+      volumeMounts:
+        - name: shared-auth
+          mountPath: /shared-auth
 
     - name: buildah
       image: quay.io/buildah/stable:latest
@@ -20,6 +26,9 @@ spec:
       tty: true
       securityContext:
         privileged: true
+      volumeMounts:
+        - name: shared-auth
+          mountPath: /shared-auth
 '''
     }
   }
@@ -76,27 +85,39 @@ spec:
       }
     }
 
-    stage('Build and Push Image') {
-      steps {
-        container('buildah') {
-          withCredentials([
-            string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
-            string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
-          ]) {
-            sh '''
-              aws ecr get-login-password --region ${AWS_REGION} | \
-              buildah login --username AWS --password-stdin ${ECR_REGISTRY}
+    stage('Login to ECR') {
+        steps {
+            container('devops') {
+            withCredentials([
+                string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
+                string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
+            ]) {
+                sh '''
+                mkdir -p /shared-auth
+                aws ecr get-login-password --region ${AWS_REGION} > /shared-auth/ecr-password
+                '''
+            }
+            }
+        }
+    }
 
-              buildah bud \
+    stage('Build and Push Image') {
+        steps {
+            container('buildah') {
+            sh '''
+                export REGISTRY_AUTH_FILE=/tmp/auth.json
+
+                cat /shared-auth/ecr-password | buildah login --username AWS --password-stdin ${ECR_REGISTRY}
+
+                buildah bud \
                 -t ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG} \
                 ${SERVICE_PATH}
 
-              buildah push \
+                buildah push \
                 ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
             '''
-          }
+            }
         }
-      }
     }
 
     stage('Update kubeconfig') {
