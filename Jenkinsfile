@@ -21,12 +21,13 @@ pipeline {
           ).trim()
 
           def changedFiles = changedFilesRaw ? changedFilesRaw.split('\n') : []
+          def commonChanged = changedFiles.any { it == 'jenkins/common.groovy' || it == 'Jenkinsfile' }
 
-          env.RUN_USER    = changedFiles.any { it.startsWith('services/user-service/')    || it.startsWith('k8s/user-service/') }    ? 'true' : 'false'
-          env.RUN_ORDER   = changedFiles.any { it.startsWith('services/order-service/')   || it.startsWith('k8s/order-service/') }   ? 'true' : 'false'
-          env.RUN_PRODUCT = changedFiles.any { it.startsWith('services/product-service/') || it.startsWith('k8s/product-service/') } ? 'true' : 'false'
-          env.RUN_PAYMENT = changedFiles.any { it.startsWith('services/payment-service/') || it.startsWith('k8s/payment-service/') } ? 'true' : 'false'
-          env.RUN_SEARCH  = changedFiles.any { it.startsWith('services/search-service/')  || it.startsWith('k8s/search-service/') }  ? 'true' : 'false'
+          env.RUN_USER    = (commonChanged || changedFiles.any { it.startsWith('services/user-service/')    || it.startsWith('k8s/user-service/')    || it == 'jenkins/user-service.groovy' }) ? 'true' : 'false'
+          env.RUN_ORDER   = (commonChanged || changedFiles.any { it.startsWith('services/order-service/')   || it.startsWith('k8s/order-service/')   || it == 'jenkins/order-service.groovy' }) ? 'true' : 'false'
+          env.RUN_PRODUCT = (commonChanged || changedFiles.any { it.startsWith('services/product-service/') || it.startsWith('k8s/product-service/') || it == 'jenkins/product-service.groovy' }) ? 'true' : 'false'
+          env.RUN_PAYMENT = (commonChanged || changedFiles.any { it.startsWith('services/payment-service/') || it.startsWith('k8s/payment-service/') || it == 'jenkins/payment-service.groovy' }) ? 'true' : 'false'
+          env.RUN_SEARCH  = (commonChanged || changedFiles.any { it.startsWith('services/search-service/')  || it.startsWith('k8s/search-service/')  || it == 'jenkins/search-service.groovy' }) ? 'true' : 'false'
 
           echo "RUN_USER=${env.RUN_USER}"
           echo "RUN_ORDER=${env.RUN_ORDER}"
