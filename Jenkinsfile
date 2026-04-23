@@ -21,14 +21,55 @@ pipeline {
           ).trim()
 
           def changedFiles = changedFilesRaw ? changedFilesRaw.split('\n') : []
-          def commonChanged = changedFiles.any { it == 'jenkins/common.groovy' || it == 'Jenkinsfile' }
 
-          env.RUN_USER    = (commonChanged || changedFiles.any { it.startsWith('services/user-service/')    || it.startsWith('k8s/user-service/')    || it == 'jenkins/user-service.groovy' }) ? 'true' : 'false'
-          env.RUN_ORDER   = (commonChanged || changedFiles.any { it.startsWith('services/order-service/')   || it.startsWith('k8s/order-service/')   || it == 'jenkins/order-service.groovy' }) ? 'true' : 'false'
-          env.RUN_PRODUCT = (commonChanged || changedFiles.any { it.startsWith('services/product-service/') || it.startsWith('k8s/product-service/') || it == 'jenkins/product-service.groovy' }) ? 'true' : 'false'
-          env.RUN_PAYMENT = (commonChanged || changedFiles.any { it.startsWith('services/payment-service/') || it.startsWith('k8s/payment-service/') || it == 'jenkins/payment-service.groovy' }) ? 'true' : 'false'
-          env.RUN_SEARCH  = (commonChanged || changedFiles.any { it.startsWith('services/search-service/')  || it.startsWith('k8s/search-service/')  || it == 'jenkins/search-service.groovy' }) ? 'true' : 'false'
+          def commonChanged = changedFiles.any { it == 'Jenkinsfile' || it == 'jenkins/common.groovy' }
 
+          env.RUN_USER = (
+            commonChanged ||
+            changedFiles.any {
+              it.startsWith('services/user-service/') ||
+              it.startsWith('k8s/user-service/') ||
+              it == 'jenkins/user-service.groovy'
+            }
+          ) ? 'true' : 'false'
+
+          env.RUN_ORDER = (
+            commonChanged ||
+            changedFiles.any {
+              it.startsWith('services/order-service/') ||
+              it.startsWith('k8s/order-service/') ||
+              it == 'jenkins/order-service.groovy'
+            }
+          ) ? 'true' : 'false'
+
+          env.RUN_PRODUCT = (
+            commonChanged ||
+            changedFiles.any {
+              it.startsWith('services/product-service/') ||
+              it.startsWith('k8s/product-service/') ||
+              it == 'jenkins/product-service.groovy'
+            }
+          ) ? 'true' : 'false'
+
+          env.RUN_PAYMENT = (
+            commonChanged ||
+            changedFiles.any {
+              it.startsWith('services/payment-service/') ||
+              it.startsWith('k8s/payment-service/') ||
+              it == 'jenkins/payment-service.groovy'
+            }
+          ) ? 'true' : 'false'
+
+          env.RUN_SEARCH = (
+            commonChanged ||
+            changedFiles.any {
+              it.startsWith('services/search-service/') ||
+              it.startsWith('k8s/search-service/') ||
+              it == 'jenkins/search-service.groovy'
+            }
+          ) ? 'true' : 'false'
+
+          echo "Changed files: ${changedFiles}"
           echo "RUN_USER=${env.RUN_USER}"
           echo "RUN_ORDER=${env.RUN_ORDER}"
           echo "RUN_PRODUCT=${env.RUN_PRODUCT}"
@@ -41,47 +82,39 @@ pipeline {
     stage('Run Changed Services') {
       steps {
         script {
-          def branches = [:]
-
           if (env.RUN_USER == 'true') {
-            branches['user-service'] = {
-              def svc = load 'jenkins/user-service.groovy'
-              svc.run(this)
-            }
+            def svc = load 'jenkins/user-service.groovy'
+            svc.run(this)
           }
 
           if (env.RUN_ORDER == 'true') {
-            branches['order-service'] = {
-              def svc = load 'jenkins/order-service.groovy'
-              svc.run(this)
-            }
+            def svc = load 'jenkins/order-service.groovy'
+            svc.run(this)
           }
 
           if (env.RUN_PRODUCT == 'true') {
-            branches['product-service'] = {
-              def svc = load 'jenkins/product-service.groovy'
-              svc.run(this)
-            }
+            def svc = load 'jenkins/product-service.groovy'
+            svc.run(this)
           }
 
           if (env.RUN_PAYMENT == 'true') {
-            branches['payment-service'] = {
-              def svc = load 'jenkins/payment-service.groovy'
-              svc.run(this)
-            }
+            def svc = load 'jenkins/payment-service.groovy'
+            svc.run(this)
           }
 
           if (env.RUN_SEARCH == 'true') {
-            branches['search-service'] = {
-              def svc = load 'jenkins/search-service.groovy'
-              svc.run(this)
-            }
+            def svc = load 'jenkins/search-service.groovy'
+            svc.run(this)
           }
 
-          if (branches.isEmpty()) {
+          if (
+            env.RUN_USER != 'true' &&
+            env.RUN_ORDER != 'true' &&
+            env.RUN_PRODUCT != 'true' &&
+            env.RUN_PAYMENT != 'true' &&
+            env.RUN_SEARCH != 'true'
+          ) {
             echo 'No service changes detected.'
-          } else {
-            parallel branches
           }
         }
       }
