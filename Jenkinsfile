@@ -144,12 +144,6 @@ spec:
       }
     }
 
-    stage('Approve test') {
-      steps {
-        input message: "Promote ${SERVICE_NAME}:${IMAGE_TAG} to test?"
-      }
-    }
-
     stage('Deploy to test') {
       steps {
         container('devops') {
@@ -157,12 +151,6 @@ spec:
             deployEnv('test')
           }
         }
-      }
-    }
-
-    stage('Approve prod') {
-      steps {
-        input message: "Promote ${SERVICE_NAME}:${IMAGE_TAG} to prod?"
       }
     }
 
