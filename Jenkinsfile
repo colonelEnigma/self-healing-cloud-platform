@@ -1,21 +1,20 @@
 pipeline {
   agent {
     kubernetes {
-        defaultContainer 'devops'
-        yaml """
-        apiVersion: v1
-        kind: Pod
-        spec:
-        containers:
-            - name: devops
-            image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/jenkins-agent-devops:latest
-            command:
-                - cat
-            tty: true
-        """
-            }
+      defaultContainer 'devops'
+      yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+    - name: devops
+      image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/jenkins-agent-devops:latest
+      command:
+        - cat
+      tty: true
+'''
+    }
   }
-  
 
   environment {
     AWS_REGION      = 'ap-south-1'
