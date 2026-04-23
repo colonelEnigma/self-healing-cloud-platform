@@ -26,4 +26,14 @@ RUN curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-24.
 # Verify installs
 RUN kubectl version --client && docker --version
 
+# install aws cli v2
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" \
+    && apt-get update && apt-get install -y unzip \
+    && unzip awscliv2.zip \
+    && ./aws/install \
+    && rm -rf aws awscliv2.zip
+
+# Verify installs
+RUN aws --version
+
 USER jenkins
