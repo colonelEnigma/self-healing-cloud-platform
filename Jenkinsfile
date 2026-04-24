@@ -158,6 +158,21 @@ spec:
       }
     }
 
+    stage('Update Prometheus') {
+      when {
+        changeset "prometheus-values.yaml"
+      }
+      steps {
+        container('devops') {
+          sh '''
+            helm upgrade prometheus prometheus-community/prometheus \
+              -n default \
+              -f prometheus-values.yaml
+          '''
+        }
+      }
+    }
+
     stage('Rollback') {
       when {
         expression { env.IS_ROLLBACK == 'true' }
