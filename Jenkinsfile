@@ -162,6 +162,23 @@ spec:
       when {
         changeset "prometheus-values.yaml"
       }
+      agent {
+        kubernetes {
+          defaultContainer 'devops'
+          yaml '''
+    apiVersion: v1
+    kind: Pod
+    spec:
+      serviceAccountName: jenkins-deployer
+      containers:
+        - name: devops
+          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/jenkins-agent-devops:latest
+          command:
+            - cat
+          tty: true
+    '''
+        }
+      }
       steps {
         container('devops') {
           sh '''
