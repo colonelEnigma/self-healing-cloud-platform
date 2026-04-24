@@ -26,7 +26,7 @@ app.get("/metrics", async (req, res) => {
 });
 
 // routes
-app.use("/users", userRoutes);
+app.use("/api/users", userRoutes);
 
 // health check
 app.get("/health", (req, res) => {
