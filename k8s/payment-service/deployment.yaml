@@ -43,6 +43,8 @@ spec:
               value: "${ORDER_CREATED_TOPIC}"
             - name: ORDER_CREATED_DLQ_TOPIC
               value: "${ORDER_CREATED_DLQ_TOPIC}"
+            - name: ORDER_SERVICE_URL
+              value: "http://order-service:3003"
 
           # ✅ HEALTH CHECKS
           readinessProbe:

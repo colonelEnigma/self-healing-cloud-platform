@@ -1,5 +1,10 @@
 const axios = require("axios");
 const pool = require("../config/db");
+const ORDER_SERVICE_URL = process.env.ORDER_SERVICE_URL;
+
+if (!ORDER_SERVICE_URL) {
+  throw new Error("ORDER_SERVICE_URL is not set");
+}
 
 // Create payment
 exports.createPayment = async (req, res) => {
@@ -16,7 +21,7 @@ exports.createPayment = async (req, res) => {
 
     try {
       const orderRes = await axios.get(
-        `http://order-service:3003/api/orders/${orderId}`,
+        `${ORDER_SERVICE_URL}/api/orders/${orderId}`,
         {
           headers: {
             Authorization: req.headers.authorization,
