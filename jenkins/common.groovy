@@ -98,17 +98,42 @@ def runService(scriptRef, Map cfg) {
 def deployEnv(scriptRef, Map cfg, String targetEnv, String imageTag) {
   def topic = ''
   def dlq = ''
+  def group = ''
 
   if (cfg.kafkaAware) {
     if (targetEnv == 'dev') {
       topic = 'order_created_dev'
       dlq   = 'order_created_dlq_dev'
+
+      if (cfg.serviceName == 'payment-service') {
+        group = 'payment-group-dev'
+      } else if (cfg.serviceName == 'search-service') {
+        group = 'search-group-dev'
+      } else if (cfg.serviceName == 'product-service') {
+        group = 'product-group-dev'
+      }
     } else if (targetEnv == 'test') {
       topic = 'order_created_test'
       dlq   = 'order_created_dlq_test'
+
+      if (cfg.serviceName == 'payment-service') {
+        group = 'payment-group-test'
+      } else if (cfg.serviceName == 'search-service') {
+        group = 'search-group-test'
+      } else if (cfg.serviceName == 'product-service') {
+        group = 'product-group-test'
+      }
     } else {
       topic = 'order_created'
       dlq   = 'order_created_dlq'
+
+      if (cfg.serviceName == 'payment-service') {
+        group = 'payment-group'
+      } else if (cfg.serviceName == 'search-service') {
+        group = 'search-group'
+      } else if (cfg.serviceName == 'product-service') {
+        group = 'product-group'
+      }
     }
   }
 
@@ -119,9 +144,12 @@ def deployEnv(scriptRef, Map cfg, String targetEnv, String imageTag) {
         -e 's|\\\${IMAGE_TAG}|${imageTag}|g' \
         -e 's|\\\${ORDER_CREATED_TOPIC}|${topic}|g' \
         -e 's|\\\${ORDER_CREATED_DLQ_TOPIC}|${dlq}|g' \
+        -e 's|\\\${KAFKA_CONSUMER_GROUP}|${group}|g' \
         ${cfg.k8sPath}/${cfg.deploymentFile} | kubectl apply -f -
 
-      sed -e 's|\\\${NAMESPACE}|${targetEnv}|g' ${cfg.k8sPath}/${cfg.serviceFile} | kubectl apply -f -
+      sed \
+        -e 's|\\\${NAMESPACE}|${targetEnv}|g' \
+        ${cfg.k8sPath}/${cfg.serviceFile} | kubectl apply -f -
 
       kubectl rollout status deployment/${cfg.serviceName} -n ${targetEnv}
     """
@@ -132,7 +160,9 @@ def deployEnv(scriptRef, Map cfg, String targetEnv, String imageTag) {
         -e 's|\\\${IMAGE_TAG}|${imageTag}|g' \
         ${cfg.k8sPath}/${cfg.deploymentFile} | kubectl apply -f -
 
-      sed -e 's|\\\${NAMESPACE}|${targetEnv}|g' ${cfg.k8sPath}/${cfg.serviceFile} | kubectl apply -f -
+      sed \
+        -e 's|\\\${NAMESPACE}|${targetEnv}|g' \
+        ${cfg.k8sPath}/${cfg.serviceFile} | kubectl apply -f -
 
       kubectl rollout status deployment/${cfg.serviceName} -n ${targetEnv}
     """
