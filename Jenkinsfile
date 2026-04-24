@@ -60,13 +60,22 @@ spec:
           env.IS_ROLLBACK = 'false'
 
           if (env.ROLLBACK_FILE_CHANGED == 'true' && fileExists('jenkins/rollback.env')) {
-            def rollbackCfg = readProperties file: 'jenkins/rollback.env'
+            def rollbackText = readFile('jenkins/rollback.env').trim()
 
-            env.ACTION_VALUE            = rollbackCfg.ACTION ?: ''
-            env.ROLLBACK_SERVICE        = rollbackCfg.ROLLBACK_SERVICE ?: ''
-            env.ROLLBACK_NAMESPACE      = rollbackCfg.ROLLBACK_NAMESPACE ?: ''
-            env.ROLLBACK_IMAGE_TAG      = rollbackCfg.ROLLBACK_IMAGE_TAG ?: ''
-            env.CONFIRM_ROLLBACK_VALUE  = rollbackCfg.CONFIRM_ROLLBACK ?: ''
+            def rollbackCfg = [:]
+            rollbackText.split('\n').each { line ->
+              line = line.trim()
+              if (line && !line.startsWith('#') && line.contains('=')) {
+                def parts = line.split('=', 2)
+                rollbackCfg[parts[0].trim()] = parts[1].trim()
+              }
+            }
+
+            env.ACTION_VALUE           = rollbackCfg['ACTION'] ?: ''
+            env.ROLLBACK_SERVICE       = rollbackCfg['ROLLBACK_SERVICE'] ?: ''
+            env.ROLLBACK_NAMESPACE     = rollbackCfg['ROLLBACK_NAMESPACE'] ?: ''
+            env.ROLLBACK_IMAGE_TAG     = rollbackCfg['ROLLBACK_IMAGE_TAG'] ?: ''
+            env.CONFIRM_ROLLBACK_VALUE = rollbackCfg['CONFIRM_ROLLBACK'] ?: ''
 
             if (
               env.ACTION_VALUE == 'rollback' &&
