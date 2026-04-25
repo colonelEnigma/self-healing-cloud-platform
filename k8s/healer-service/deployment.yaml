@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: healer-service
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: healer-service
+  template:
+    metadata:
+      labels:
+        app: healer-service
+    spec:
+      serviceAccountName: healer-service
+      containers:
+        - name: healer-service
+          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/healer-service:manual-8
+          ports:
+            - containerPort: 3000
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+            

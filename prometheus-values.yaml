@@ -114,6 +114,10 @@ alertmanager:
       group_wait: 10s
       group_interval: 30s
       repeat_interval: 1h
+      routes:
+        - matchers:
+            - alertname="ServiceDown"
+          receiver: healer-webhook
 
     receivers:
       - name: slack-notifications
@@ -127,6 +131,11 @@ alertmanager:
               *Description:* {{ .Annotations.description }}
               *Severity:* {{ .Labels.severity }}
               {{ end }}
+
+      - name: healer-webhook
+        webhook_configs:
+          - url: http://healer-service.default.svc.cluster.local:3000/heal
+            send_resolved: false
 
 pushgateway:
   enabled: false
