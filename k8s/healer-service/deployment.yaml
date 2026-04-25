@@ -16,7 +16,7 @@ spec:
       serviceAccountName: healer-service
       containers:
         - name: healer-service
-          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/healer-service:manual-8
+          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/healer-service:manual-11
           ports:
             - containerPort: 3000
           resources:
@@ -26,4 +26,15 @@ spec:
             limits:
               cpu: 500m
               memory: 256Mi
+          env:
+            - name: DB_HOST
+              value: "postgres.default.svc.cluster.local"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_USER
+              value: "admin"
+            - name: DB_PASSWORD
+              value: "admin"
+            - name: DB_NAME
+              value: "healerdb"
             

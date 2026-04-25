@@ -59,6 +59,8 @@ serverFiles:
             for: 1m
             labels:
               severity: critical
+              deployment: "{{ $labels.job }}"
+              namespace: "dev"
             annotations:
               summary: "Service is down"
               description: "{{ $labels.job }} is down"
