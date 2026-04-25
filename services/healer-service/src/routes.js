@@ -15,7 +15,7 @@ const markCooldown = (key) => healingCooldowns.set(key, Date.now());
 /* --- Helpers --- */
 const extractDeploymentName = (labels = {}) =>
   labels.deployment || labels.service || labels.app || labels.job;
-const extractNamespace = (labels = {}) => labels.namespace || "dev";
+const extractNamespace = (labels = {}) => labels.namespace || "unknown";
 
 /* --- Routes --- */
 

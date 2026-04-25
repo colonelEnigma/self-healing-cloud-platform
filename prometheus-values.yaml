@@ -25,45 +25,103 @@ serverFiles:
         static_configs:
           - targets:
               - payment-service.prod.svc.cluster.local:4000
+            labels:
+              deployment: payment-service
+              namespace: prod
+
+      - job_name: payment-service-dev
+        metrics_path: /metrics
+        static_configs:
+          - targets:
+              - payment-service.dev.svc.cluster.local:4000
+            labels:
+              deployment: payment-service
+              namespace: dev
 
       - job_name: search-service
         metrics_path: /metrics
         static_configs:
           - targets:
               - search-service.prod.svc.cluster.local:5003
+            labels:
+              deployment: search-service
+              namespace: prod
+
+      - job_name: search-service-dev
+        metrics_path: /metrics
+        static_configs:
+          - targets:
+              - search-service.dev.svc.cluster.local:5003
+            labels:
+              deployment: search-service
+              namespace: dev
 
       - job_name: product-service
         metrics_path: /metrics
         static_configs:
           - targets:
               - product-service.prod.svc.cluster.local:3005
+            labels:
+              deployment: product-service
+              namespace: prod
+
+      - job_name: product-service-dev
+        metrics_path: /metrics
+        static_configs:
+          - targets:
+              - product-service.dev.svc.cluster.local:3005
+            labels:
+              deployment: product-service
+              namespace: dev
 
       - job_name: order-service
         metrics_path: /metrics
         static_configs:
           - targets:
               - order-service.prod.svc.cluster.local:3003
+            labels:
+              deployment: order-service
+              namespace: prod
+
+      - job_name: order-service-dev
+        metrics_path: /metrics
+        static_configs:
+          - targets:
+              - order-service.dev.svc.cluster.local:3003
+            labels:
+              deployment: order-service
+              namespace: dev
 
       - job_name: user-service
         metrics_path: /metrics
         static_configs:
           - targets:
               - user-service.prod.svc.cluster.local:3000
+            labels:
+              deployment: user-service
+              namespace: prod
+
+      - job_name: user-service-dev
+        metrics_path: /metrics
+        static_configs:
+          - targets:
+              - user-service.dev.svc.cluster.local:3000
+            labels:
+              deployment: user-service
+              namespace: dev
 
   alerting_rules.yml:
     groups:
       - name: platform-alerts
         rules:
           - alert: ServiceDown
-            expr: up{job=~"payment-service|search-service|order-service|user-service|product-service"} == 0
+            expr: up{deployment=~"payment-service|search-service|order-service|user-service|product-service"} == 0
             for: 1m
             labels:
               severity: critical
-              deployment: "{{ $labels.job }}"
-              namespace: "dev"
             annotations:
               summary: "Service is down"
-              description: "{{ $labels.job }} is down"
+              description: "{{ $labels.deployment }} is down in {{ $labels.namespace }}"
 
           - alert: KafkaProcessingErrorsHigh
             expr: increase(kafka_processing_errors_total[5m]) > 0
@@ -112,16 +170,30 @@ alertmanager:
       slack_api_url: ${SLACK_WEBHOOK_URL}
 
     route:
-      receiver: slack-notifications
+      receiver: default-receiver
       group_wait: 10s
       group_interval: 30s
       repeat_interval: 1h
       routes:
+        # All ServiceDown alerts go to healer
         - matchers:
             - alertname="ServiceDown"
           receiver: healer-webhook
+          continue: true
+
+        # Only prod alerts go to Slack
+        - matchers:
+            - namespace="prod"
+          receiver: slack-notifications
 
     receivers:
+      - name: default-receiver
+
+      - name: healer-webhook
+        webhook_configs:
+          - url: http://healer-service.default.svc.cluster.local:3000/heal
+            send_resolved: false
+
       - name: slack-notifications
         slack_configs:
           - channel: "#all-self-healing-cloud-platform"
@@ -131,13 +203,10 @@ alertmanager:
               {{ range .Alerts }}
               *Alert:* {{ .Annotations.summary }}
               *Description:* {{ .Annotations.description }}
+              *Namespace:* {{ .Labels.namespace }}
+              *Deployment:* {{ .Labels.deployment }}
               *Severity:* {{ .Labels.severity }}
               {{ end }}
-
-      - name: healer-webhook
-        webhook_configs:
-          - url: http://healer-service.default.svc.cluster.local:3000/heal
-            send_resolved: false
-
+              
 pushgateway:
   enabled: false
