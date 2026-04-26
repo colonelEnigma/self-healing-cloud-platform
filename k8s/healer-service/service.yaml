@@ -4,9 +4,10 @@ metadata:
   name: healer-service
   namespace: default
 spec:
-  type: ClusterIP
   selector:
     app: healer-service
   ports:
-    - port: 3000
-      targetPort: 3000
+    - protocol: TCP
+      port: 7000
+      targetPort: 7000
+  type: ClusterIP

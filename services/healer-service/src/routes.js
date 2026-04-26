@@ -5,6 +5,8 @@ const pool = require("./config/db");
 const { appsApi, restartDeployment, scaleDeployment } = require("./services/k8s");
 const recordAction = require("./services/recorder");
 const { isRateLimited } = require("./services/rateLimiter");
+const { retryAsync } = require("./services/retry");
+const { isCircuitOpen } = require("./services/circuitBreaker");
 
 /* --- Cooldown logic --- */
 const healingCooldowns = new Map();
@@ -39,7 +41,7 @@ router.get("/health", (req, res) => res.status(200).send("OK"));
 
 // Heal
 router.post("/heal", async (req, res) => {
-  let alertName = "unknown", namespace = "unknown", deploymentName = "unknown";
+  let alertName = "unknown", namespace = "unknown", deploymentName = "unknown", action = "unknown";
   try {
     console.log("Received alert payload:", JSON.stringify(req.body));
     const alert = req.body?.alerts?.[0];
@@ -52,6 +54,7 @@ router.post("/heal", async (req, res) => {
     if (!alertName) return res.status(400).send("Missing alertname");
 
     const policy = ALLOWED_ACTIONS[alertName];
+    action = policy?.action || "unknown";
     if (!policy) return res.status(200).send("No policy");
     if (!policy.enabled) return res.status(200).send("Notify only");
     if (!deploymentName) return res.status(400).send("Missing deployment");
@@ -94,11 +97,47 @@ router.post("/heal", async (req, res) => {
       return res.status(200).send(reason);
     }
 
-    const deployment = await appsApi.readNamespacedDeployment(deploymentName, namespace);
+    //Circuit Breaker Check
+    const circuitStatus = await isCircuitOpen({
+      alertName,
+      namespace,
+      deployment: deploymentName,
+      failureThreshold: policy.circuitBreakerFailureThreshold,
+      windowMinutes: policy.circuitBreakerWindowMinutes,
+    });
+
+    if (circuitStatus.open) {
+      const reason = `circuit breaker open: ${circuitStatus.failureCount}/${circuitStatus.failureThreshold} failures in ${circuitStatus.windowMinutes} minutes`;
+
+      await recordAction({
+        alertName,
+        namespace,
+        deployment: deploymentName,
+        action: policy.action,
+        result: "blocked",
+        reason,
+      });
+
+      return res.status(200).send(reason);
+    }
+
+    const deployment = await retryAsync({
+      actionName: "read deployment",
+      retries: policy.retryAttempts,
+      baseDelayMs: policy.retryBaseDelayMs,
+      fn: () => appsApi.readNamespacedDeployment(deploymentName, namespace),
+    });
+    
     const currentReplicas = deployment.body?.spec?.replicas ?? 0;
 
     if (currentReplicas === 0) {
-      await scaleDeployment(namespace, deploymentName, 1);
+      await retryAsync({
+        actionName: "scale deployment",
+        retries: policy.retryAttempts,
+        baseDelayMs: policy.retryBaseDelayMs,
+        fn: () => scaleDeployment(namespace, deploymentName, 1),
+      });
+      
       await recordAction({ 
         alertName,
         namespace, 
@@ -111,7 +150,13 @@ router.post("/heal", async (req, res) => {
       return res.status(200).send("Scaled to 1");
     }
 
-    await restartDeployment(namespace, deploymentName);
+    await retryAsync({
+      actionName: "restart deployment",
+      retries: policy.retryAttempts,
+      baseDelayMs: policy.retryBaseDelayMs,
+      fn: () => restartDeployment(namespace, deploymentName),
+    });
+    
     await recordAction({ 
       alertName,
       namespace, 
@@ -122,17 +167,27 @@ router.post("/heal", async (req, res) => {
     });
     markCooldown(cooldownKey, policy.cooldownSeconds);
     return res.status(200).send("Restarted");
-  } catch (err) {
-    await recordAction({
-      alertName,
-      namespace, 
-      deployment: deploymentName, 
-      action: "unknown", 
-      result: "error", 
-      reason: err?.message || "unknown error" 
+  } 
+  catch (err) {
+    console.error("Unhandled healer error:", err);
+
+    try {
+      await recordAction({
+        alertName: alertName || "unknown",
+        namespace: namespace || "unknown",
+        deployment: deploymentName || "unknown",
+        action: action || "unknown",
+        result: "error",
+        reason: err.message || "unknown error",
+      });
+    } catch (recordErr) {
+      console.error("Failed to record healer error:", recordErr.message);
+    }
+
+    return res.status(500).json({
+      error: "healer failed",
+      message: err.message,
     });
-    console.error("Healer error:", err?.body || err);
-    return res.status(500).send("Error");
   }
 });
 
