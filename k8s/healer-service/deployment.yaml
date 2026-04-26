@@ -16,7 +16,7 @@ spec:
       serviceAccountName: healer-service
       containers:
         - name: healer-service
-          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/healer-service:manual-13
+          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/healer-service:manual-18
           ports:
             - containerPort: 3000
           resources:

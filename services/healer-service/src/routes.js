@@ -4,13 +4,28 @@ const ALLOWED_ACTIONS = require("./config/actions");
 const pool = require("./config/db");
 const { appsApi, restartDeployment, scaleDeployment } = require("./services/k8s");
 const recordAction = require("./services/recorder");
+const { isRateLimited } = require("./services/rateLimiter");
 
 /* --- Cooldown logic --- */
-const COOLDOWN_MS = 5 * 60 * 1000;
 const healingCooldowns = new Map();
-const getCooldownKey = (alertName, namespace, deployment) => `${alertName}:${namespace}:${deployment}`;
-const isInCooldown = (key) => Date.now() - (healingCooldowns.get(key) || 0) < COOLDOWN_MS;
-const markCooldown = (key) => healingCooldowns.set(key, Date.now());
+
+const getCooldownKey = (alertName, namespace, deployment) =>
+  `${alertName}:${namespace}:${deployment}`;
+
+const isInCooldown = (key, cooldownSeconds) => {
+  if (!cooldownSeconds || cooldownSeconds <= 0) return false;
+
+  const lastActionTime = healingCooldowns.get(key);
+  if (!lastActionTime) return false;
+
+  return Date.now() - lastActionTime < cooldownSeconds * 1000;
+};
+
+const markCooldown = (key, cooldownSeconds) => {
+  if (!cooldownSeconds || cooldownSeconds <= 0) return;
+
+  healingCooldowns.set(key, Date.now());
+};
 
 /* --- Helpers --- */
 const extractDeploymentName = (labels = {}) =>
@@ -44,7 +59,7 @@ router.post("/heal", async (req, res) => {
     if (!policy.allowedDeployments.includes(deploymentName)) return res.status(403).send("Deployment not allowed");
 
     const cooldownKey = getCooldownKey(alertName, namespace, deploymentName);
-    if (isInCooldown(cooldownKey)) {
+    if (isInCooldown(cooldownKey, policy.cooldownSeconds)) {
       await recordAction({ 
         alertName,
         namespace,
@@ -54,6 +69,29 @@ router.post("/heal", async (req, res) => {
         reason: "cooldown active" 
       });
       return res.status(200).send("Cooldown active");
+    }
+
+    // Rate Limit Check
+    const rateLimitStatus = await isRateLimited({
+      alertName,
+      namespace,
+      deployment: deploymentName,
+      maxActionsPerWindow: policy.maxActionsPerWindow,
+      windowMinutes: policy.windowMinutes,
+    });
+
+    if (rateLimitStatus.limited) {
+      const reason = `rate limit exceeded: ${rateLimitStatus.actionCount}/${rateLimitStatus.maxActionsPerWindow} actions in ${rateLimitStatus.windowMinutes} minutes`;
+
+      await recordAction({
+        alertName,
+        namespace,
+        deployment: deploymentName,
+        action: policy.action,
+        result: "blocked",
+        reason,
+      });
+      return res.status(200).send(reason);
     }
 
     const deployment = await appsApi.readNamespacedDeployment(deploymentName, namespace);
@@ -69,7 +107,7 @@ router.post("/heal", async (req, res) => {
         result: "success", 
         reason: "replicas were 0" 
       });
-      markCooldown(cooldownKey);
+      markCooldown(cooldownKey, policy.cooldownSeconds);
       return res.status(200).send("Scaled to 1");
     }
 
@@ -82,7 +120,7 @@ router.post("/heal", async (req, res) => {
       result: "success", 
       reason: "replicas already running" 
     });
-    markCooldown(cooldownKey);
+    markCooldown(cooldownKey, policy.cooldownSeconds);
     return res.status(200).send("Restarted");
   } catch (err) {
     await recordAction({
