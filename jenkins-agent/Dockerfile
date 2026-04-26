@@ -33,7 +33,13 @@ RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2
     && ./aws/install \
     && rm -rf aws awscliv2.zip
 
+# Install Helm
+RUN curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
 # Verify installs
+RUN git --version
 RUN aws --version
+RUN kubectl version --client
+RUN helm version
 
 USER jenkins
