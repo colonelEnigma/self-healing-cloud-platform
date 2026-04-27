@@ -1,14 +1,14 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: api-gateway
-  namespace: default
+  name: shcp-prod-api-public-ingress
+  namespace: prod
 spec:
   ingressClassName: nginx
   rules:
     - http:
         paths:
-          - path: /users
+          - path: /api/users
             pathType: Prefix
             backend:
               service:
