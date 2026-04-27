@@ -34,7 +34,7 @@ app.get("/metrics", async (req, res) => {
 });
 
 // routes
-app.use("/search", searchRoutes);
+app.use("/api/search", searchRoutes);
 
 // 🔥 HTTP server
 const server = http.createServer(app);

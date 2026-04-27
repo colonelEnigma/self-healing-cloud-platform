@@ -1,0 +1,52 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: shcp-dev-api-public-ingress
+  namespace: dev
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /api/$1$2
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /dev/api/(users)(/.*)?
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: user-service
+                port:
+                  number: 3000
+
+          - path: /dev/api/(orders)(/.*)?
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: order-service
+                port:
+                  number: 3003
+
+          - path: /dev/api/(payment)(/.*)?
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: payment-service
+                port:
+                  number: 4000
+
+          - path: /dev/api/(products)(/.*)?
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: product-service
+                port:
+                  number: 3005
+
+          - path: /dev/api/(search)(/.*)?
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: search-service
+                port:
+                  number: 5003
