@@ -28,6 +28,8 @@ serverFiles:
             labels:
               deployment: payment-service
               namespace: prod
+              environment: prod
+              service: payment-service
 
       - job_name: payment-service-dev
         metrics_path: /metrics
@@ -37,6 +39,8 @@ serverFiles:
             labels:
               deployment: payment-service
               namespace: dev
+              environment: dev
+              service: payment-service
 
       - job_name: search-service
         metrics_path: /metrics
@@ -46,6 +50,8 @@ serverFiles:
             labels:
               deployment: search-service
               namespace: prod
+              environment: prod
+              service: search-service
 
       - job_name: search-service-dev
         metrics_path: /metrics
@@ -55,6 +61,8 @@ serverFiles:
             labels:
               deployment: search-service
               namespace: dev
+              environment: dev
+              service: search-service
 
       - job_name: product-service
         metrics_path: /metrics
@@ -64,6 +72,8 @@ serverFiles:
             labels:
               deployment: product-service
               namespace: prod
+              environment: prod
+              service: product-service
 
       - job_name: product-service-dev
         metrics_path: /metrics
@@ -73,6 +83,8 @@ serverFiles:
             labels:
               deployment: product-service
               namespace: dev
+              environment: dev
+              service: product-service
 
       - job_name: order-service
         metrics_path: /metrics
@@ -82,6 +94,8 @@ serverFiles:
             labels:
               deployment: order-service
               namespace: prod
+              environment: prod
+              service: order-service
 
       - job_name: order-service-dev
         metrics_path: /metrics
@@ -91,6 +105,8 @@ serverFiles:
             labels:
               deployment: order-service
               namespace: dev
+              environment: dev
+              service: order-service
 
       - job_name: user-service
         metrics_path: /metrics
@@ -100,6 +116,8 @@ serverFiles:
             labels:
               deployment: user-service
               namespace: prod
+              environment: prod
+              service: user-service
 
       - job_name: user-service-dev
         metrics_path: /metrics
@@ -109,6 +127,8 @@ serverFiles:
             labels:
               deployment: user-service
               namespace: dev
+              environment: dev
+              service: user-service
 
   alerting_rules.yml:
     groups:
@@ -175,9 +195,10 @@ alertmanager:
       group_interval: 30s
       repeat_interval: 1h
       routes:
-        # All ServiceDown alerts go to healer
+        # Dev and prod ServiceDown alerts go to healer. Test is intentionally excluded.
         - matchers:
             - alertname="ServiceDown"
+            - namespace=~"dev|prod"
           receiver: healer-webhook
           continue: true
 
@@ -191,7 +212,7 @@ alertmanager:
 
       - name: healer-webhook
         webhook_configs:
-          - url: http://healer-service.default.svc.cluster.local:3000/heal
+          - url: http://healer-service.default.svc.cluster.local:7000/heal
             send_resolved: false
 
       - name: slack-notifications
@@ -210,3 +231,4 @@ alertmanager:
               
 pushgateway:
   enabled: false
+

@@ -20,3 +20,5 @@ coverage/
 
 # context files
 .context/
+
+AGENTS.md

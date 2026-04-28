@@ -2,7 +2,7 @@ const ALLOWED_ACTIONS = {
   ServiceDown: {
     enabled: true,
     action: "scale-or-restart",
-    allowedNamespaces: ["dev"],
+    allowedNamespaces: ["dev", "prod"],
     allowedDeployments: [
       "payment-service",
       "order-service",

@@ -9,6 +9,16 @@ const ignoredPaths = new Set([
   "/.well-known/appspecific/com.chrome.devtools.json",
 ]);
 
+const normalizeRoute = (req) => {
+  const routePath = req.route?.path;
+
+  if (req.baseUrl && routePath) {
+    return `${req.baseUrl}${routePath}`;
+  }
+
+  return routePath || req.path || "unknown";
+};
+
 const metricsMiddleware = (req, res, next) => {
   const start = Date.now();
 
@@ -18,19 +28,17 @@ const metricsMiddleware = (req, res, next) => {
     }
 
     const duration = (Date.now() - start) / 1000;
-
-    // Use originalUrl so mounted routes like /api/... are preserved
-    const route = req.originalUrl || req.path || "unknown";
-    const status = String(res.statusCode);
+    const route = normalizeRoute(req);
+    const statusCode = String(res.statusCode);
 
     httpRequestCounter.inc({
       method: req.method,
       route,
-      status,
+      status_code: statusCode,
     });
 
     httpRequestDuration
-      .labels(req.method, route, status)
+      .labels(req.method, route, statusCode)
       .observe(duration);
   });
 

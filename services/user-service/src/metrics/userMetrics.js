@@ -25,10 +25,17 @@ const kafkaProcessingErrors = new client.Counter({
   help: "Total Kafka processing errors",
 });
 
+const httpRequestCounter = new client.Counter({
+  name: "http_requests_total",
+  help: "Total HTTP requests",
+  labelNames: ["method", "route", "status_code"],
+});
+
 module.exports = {
   client,
   httpRequestDuration,
   kafkaMessagesConsumed,
   kafkaProcessingDuration,
   kafkaProcessingErrors,
+  httpRequestCounter,
 };
