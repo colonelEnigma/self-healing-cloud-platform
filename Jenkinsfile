@@ -48,28 +48,50 @@ spec:
         }
       }
       steps {
+        checkout scm
         script {
+          def currentCommit = sh(
+            script: 'git rev-parse HEAD',
+            returnStdout: true
+          ).trim()
+
+          def previousSuccessfulCommit = env.GIT_PREVIOUS_SUCCESSFUL_COMMIT ?: ''
+          def diffBase = previousSuccessfulCommit?.trim() ? previousSuccessfulCommit.trim() : 'HEAD~1'
+          def diffCommand = previousSuccessfulCommit?.trim() == currentCommit ? 'true' : "git diff --name-only ${diffBase} HEAD || true"
           def changedFilesRaw = sh(
-            script: 'git diff --name-only HEAD~1 HEAD || true',
+            script: diffCommand,
             returnStdout: true
           ).trim()
 
           def changedFiles = changedFilesRaw ? changedFilesRaw.split('\n') : []
+          env.CURRENT_COMMIT = currentCommit
+          env.DIFF_BASE_COMMIT = diffBase
 
           env.ROLLBACK_FILE_CHANGED = changedFiles.contains('jenkins/rollback.env') ? 'true' : 'false'
+          env.PROMOTION_FILE_CHANGED = changedFiles.contains('jenkins/promotion.env') ? 'true' : 'false'
           env.IS_ROLLBACK = 'false'
+          env.IS_PROMOTION = 'false'
+          env.ROLLBACK_SERVICE = ''
+          env.ROLLBACK_NAMESPACE = ''
+          env.ROLLBACK_IMAGE_TAG = ''
+          env.PROMOTE_SERVICE = ''
+          env.PROMOTE_NAMESPACE = ''
+          env.PROMOTE_IMAGE_TAG = ''
 
-          if (env.ROLLBACK_FILE_CHANGED == 'true' && fileExists('jenkins/rollback.env')) {
-            def rollbackText = readFile('jenkins/rollback.env').trim()
-
-            def rollbackCfg = [:]
-            rollbackText.split('\n').each { line ->
+          def parseEnvFile = { filePath ->
+            def cfg = [:]
+            readFile(filePath).trim().split('\n').each { line ->
               line = line.trim()
               if (line && !line.startsWith('#') && line.contains('=')) {
                 def parts = line.split('=', 2)
-                rollbackCfg[parts[0].trim()] = parts[1].trim()
+                cfg[parts[0].trim()] = parts[1].trim()
               }
             }
+            return cfg
+          }
+
+          if (env.ROLLBACK_FILE_CHANGED == 'true' && fileExists('jenkins/rollback.env')) {
+            def rollbackCfg = parseEnvFile('jenkins/rollback.env')
 
             env.ACTION_VALUE           = rollbackCfg['ACTION'] ?: ''
             env.ROLLBACK_SERVICE       = rollbackCfg['ROLLBACK_SERVICE'] ?: ''
@@ -88,9 +110,33 @@ spec:
             }
           }
 
+          if (env.PROMOTION_FILE_CHANGED == 'true' && fileExists('jenkins/promotion.env')) {
+            def promotionCfg = parseEnvFile('jenkins/promotion.env')
+
+            env.PROMOTION_ACTION_VALUE   = promotionCfg['ACTION'] ?: ''
+            env.PROMOTE_SERVICE          = promotionCfg['PROMOTE_SERVICE'] ?: ''
+            env.PROMOTE_NAMESPACE        = promotionCfg['PROMOTE_NAMESPACE'] ?: ''
+            env.PROMOTE_IMAGE_TAG        = promotionCfg['PROMOTE_IMAGE_TAG'] ?: ''
+            env.CONFIRM_PROMOTION_VALUE  = promotionCfg['CONFIRM_PROMOTION'] ?: ''
+
+            if (
+              env.PROMOTION_ACTION_VALUE == 'promote' &&
+              env.CONFIRM_PROMOTION_VALUE == 'true' &&
+              env.PROMOTE_SERVICE?.trim() &&
+              env.PROMOTE_NAMESPACE?.trim() &&
+              env.PROMOTE_IMAGE_TAG?.trim()
+            ) {
+              env.IS_PROMOTION = 'true'
+            }
+          }
+
+          if (env.IS_ROLLBACK == 'true' && env.IS_PROMOTION == 'true') {
+            error 'Only one of jenkins/rollback.env or jenkins/promotion.env may contain a confirmed action in a single commit.'
+          }
+
           def commonChanged = changedFiles.any { it == 'Jenkinsfile' || it == 'jenkins/common.groovy' }
 
-          if (env.IS_ROLLBACK == 'true') {
+          if (env.IS_ROLLBACK == 'true' || env.IS_PROMOTION == 'true') {
             env.RUN_USER = 'false'
             env.RUN_ORDER = 'false'
             env.RUN_PRODUCT = 'false'
@@ -144,11 +190,18 @@ spec:
           }
 
           echo "Changed files: ${changedFiles}"
+          echo "CURRENT_COMMIT=${env.CURRENT_COMMIT}"
+          echo "DIFF_BASE_COMMIT=${env.DIFF_BASE_COMMIT}"
           echo "ROLLBACK_FILE_CHANGED=${env.ROLLBACK_FILE_CHANGED}"
+          echo "PROMOTION_FILE_CHANGED=${env.PROMOTION_FILE_CHANGED}"
           echo "IS_ROLLBACK=${env.IS_ROLLBACK}"
+          echo "IS_PROMOTION=${env.IS_PROMOTION}"
           echo "ROLLBACK_SERVICE=${env.ROLLBACK_SERVICE}"
           echo "ROLLBACK_NAMESPACE=${env.ROLLBACK_NAMESPACE}"
           echo "ROLLBACK_IMAGE_TAG=${env.ROLLBACK_IMAGE_TAG}"
+          echo "PROMOTE_SERVICE=${env.PROMOTE_SERVICE}"
+          echo "PROMOTE_NAMESPACE=${env.PROMOTE_NAMESPACE}"
+          echo "PROMOTE_IMAGE_TAG=${env.PROMOTE_IMAGE_TAG}"
           echo "RUN_USER=${env.RUN_USER}"
           echo "RUN_ORDER=${env.RUN_ORDER}"
           echo "RUN_PRODUCT=${env.RUN_PRODUCT}"
@@ -181,11 +234,44 @@ spec:
       }
       steps {
         container('devops') {
+          checkout scm
           sh '''
             helm upgrade prometheus prometheus-community/prometheus \
               -n default \
               -f prometheus-values.yaml
           '''
+        }
+      }
+    }
+
+    stage('Promote') {
+      when {
+        expression { env.IS_PROMOTION == 'true' }
+      }
+      agent {
+        kubernetes {
+          defaultContainer 'devops'
+          yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  serviceAccountName: jenkins-deployer
+  containers:
+    - name: devops
+      image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/jenkins-agent-devops:latest
+      command:
+        - cat
+      tty: true
+'''
+        }
+      }
+      steps {
+        container('devops') {
+          checkout scm
+          script {
+            def common = load 'jenkins/common.groovy'
+            common.promoteService(this, env.PROMOTE_SERVICE, env.PROMOTE_NAMESPACE, env.PROMOTE_IMAGE_TAG)
+          }
         }
       }
     }
@@ -213,6 +299,27 @@ spec:
       }
       steps {
         script {
+          def allowedRollbackServices = [
+            'user-service',
+            'order-service',
+            'payment-service',
+            'product-service',
+            'search-service'
+          ]
+          def allowedRollbackNamespaces = ['dev', 'test', 'prod']
+
+          if (!allowedRollbackServices.contains(env.ROLLBACK_SERVICE)) {
+            error "Unsupported rollback service: ${env.ROLLBACK_SERVICE}"
+          }
+
+          if (!allowedRollbackNamespaces.contains(env.ROLLBACK_NAMESPACE)) {
+            error "Unsupported rollback namespace: ${env.ROLLBACK_NAMESPACE}"
+          }
+
+          if (!(env.ROLLBACK_IMAGE_TAG ==~ /^[A-Za-z0-9_.-]+$/)) {
+            error "Invalid rollback image tag: ${env.ROLLBACK_IMAGE_TAG}"
+          }
+
           def image = "348071628290.dkr.ecr.ap-south-1.amazonaws.com/${env.ROLLBACK_SERVICE}:${env.ROLLBACK_IMAGE_TAG}"
 
           sh """
@@ -229,7 +336,7 @@ spec:
 
     stage('Run Changed Services') {
       when {
-        expression { env.IS_ROLLBACK != 'true' }
+        expression { env.IS_ROLLBACK != 'true' && env.IS_PROMOTION != 'true' }
       }
       agent {
         kubernetes {

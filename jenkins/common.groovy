@@ -30,6 +30,78 @@ spec:
 '''
 }
 
+def serviceConfigs() {
+  return [
+    'user-service': [
+      serviceName   : 'user-service',
+      awsRegion     : 'ap-south-1',
+      ecrRegistry   : '348071628290.dkr.ecr.ap-south-1.amazonaws.com',
+      ecrRepository : 'user-service',
+      servicePath   : 'services/user-service',
+      k8sPath       : 'k8s/user-service',
+      deploymentFile: 'deployment.yml',
+      serviceFile   : 'service.yml',
+      kafkaAware    : false
+    ],
+    'order-service': [
+      serviceName   : 'order-service',
+      awsRegion     : 'ap-south-1',
+      ecrRegistry   : '348071628290.dkr.ecr.ap-south-1.amazonaws.com',
+      ecrRepository : 'order-service',
+      servicePath   : 'services/order-service',
+      k8sPath       : 'k8s/order-service',
+      deploymentFile: 'deployment.yml',
+      serviceFile   : 'service.yml',
+      kafkaAware    : true
+    ],
+    'payment-service': [
+      serviceName   : 'payment-service',
+      awsRegion     : 'ap-south-1',
+      ecrRegistry   : '348071628290.dkr.ecr.ap-south-1.amazonaws.com',
+      ecrRepository : 'payment-service',
+      servicePath   : 'services/payment-service',
+      k8sPath       : 'k8s/payment-service',
+      deploymentFile: 'deployment.yaml',
+      serviceFile   : 'service.yaml',
+      kafkaAware    : true
+    ],
+    'product-service': [
+      serviceName   : 'product-service',
+      awsRegion     : 'ap-south-1',
+      ecrRegistry   : '348071628290.dkr.ecr.ap-south-1.amazonaws.com',
+      ecrRepository : 'product-service',
+      servicePath   : 'services/product-service',
+      k8sPath       : 'k8s/product-service',
+      deploymentFile: 'deployment.yml',
+      serviceFile   : 'service.yml',
+      kafkaAware    : true
+    ],
+    'search-service': [
+      serviceName   : 'search-service',
+      awsRegion     : 'ap-south-1',
+      ecrRegistry   : '348071628290.dkr.ecr.ap-south-1.amazonaws.com',
+      ecrRepository : 'search-service',
+      servicePath   : 'services/search-service',
+      k8sPath       : 'k8s/search-service',
+      deploymentFile: 'deployment.yaml',
+      serviceFile   : 'service.yaml',
+      kafkaAware    : true
+    ]
+  ]
+}
+
+def configForService(String serviceName) {
+  def cfg = serviceConfigs()[serviceName]
+  if (!cfg) {
+    throw new IllegalArgumentException("Unsupported service for Jenkins deployment: ${serviceName}")
+  }
+  return cfg
+}
+
+def runNamedService(scriptRef, String serviceName) {
+  runService(scriptRef, configForService(serviceName))
+}
+
 def runService(scriptRef, Map cfg) {
   scriptRef.podTemplate(yaml: podYaml(), defaultContainer: 'devops') {
     scriptRef.node(scriptRef.POD_LABEL) {
@@ -85,17 +157,48 @@ def runService(scriptRef, Map cfg) {
           deployEnv(scriptRef, cfg, 'test', scriptRef.env.IMAGE_TAG)
         }
       }
-
-      scriptRef.stage("${cfg.serviceName} - Deploy to prod") {
-        scriptRef.container('devops') {
-          deployEnv(scriptRef, cfg, 'prod', scriptRef.env.IMAGE_TAG)
-        }
-      }
     }
   }
 }
 
+def promoteService(scriptRef, String serviceName, String targetEnv, String imageTag) {
+  def cfg = configForService(serviceName)
+  def allowedEnvs = ['prod']
+  if (!allowedEnvs.contains(targetEnv)) {
+    scriptRef.error("Promotion target must be prod; got '${targetEnv}'. Dev and test deploy automatically from normal service changes.")
+  }
+
+  if (!(imageTag ==~ /^[A-Za-z0-9_.-]+$/)) {
+    scriptRef.error("Invalid promotion image tag '${imageTag}'.")
+  }
+
+  def expectedImage = "${cfg.ecrRegistry}/${cfg.ecrRepository}:${imageTag}"
+  def currentImage = scriptRef.sh(
+    script: """kubectl get deployment/${cfg.serviceName} -n ${targetEnv} -o jsonpath='{.spec.template.spec.containers[?(@.name=="${cfg.serviceName}")].image}' 2>/dev/null || true""",
+    returnStdout: true
+  ).trim()
+
+  scriptRef.echo "Promotion request: ${cfg.serviceName} -> ${targetEnv} using ${expectedImage}"
+
+  if (currentImage == expectedImage) {
+    scriptRef.echo "Deployment already runs the requested image. Verifying rollout without reapplying manifests."
+    scriptRef.sh """
+      kubectl rollout status deployment/${cfg.serviceName} -n ${targetEnv}
+      kubectl get pods -n ${targetEnv}
+    """
+    return
+  }
+
+  deployEnv(scriptRef, cfg, targetEnv, imageTag)
+  scriptRef.sh "kubectl get pods -n ${targetEnv}"
+}
+
 def deployEnv(scriptRef, Map cfg, String targetEnv, String imageTag) {
+  def allowedEnvs = ['dev', 'test', 'prod']
+  if (!allowedEnvs.contains(targetEnv)) {
+    scriptRef.error("Deployment target must be one of ${allowedEnvs}; got '${targetEnv}'.")
+  }
+
   def topic = ''
   def dlq = ''
   def group = ''
