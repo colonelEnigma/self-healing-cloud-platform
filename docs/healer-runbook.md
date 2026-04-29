@@ -291,7 +291,7 @@ Check likely causes:
 
 ## Security Notes
 
-- Rotate the Slack webhook because it has been exposed in terminal output.
+- The previously exposed Slack webhook was rotated; rotate immediately if any webhook is exposed again.
 - Do not commit Slack webhooks, kubeconfigs, DB passwords, AWS keys, or tokens.
 - Keep Slack webhook in Kubernetes Secret `alertmanager-secrets` with key `SLACK_WEBHOOK_URL`.
 - Current healer RBAC is limited to `get` and `patch` deployments in `dev` and `prod`.
