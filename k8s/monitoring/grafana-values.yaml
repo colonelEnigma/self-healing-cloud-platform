@@ -1,0 +1,47 @@
+service:
+  type: LoadBalancer
+
+envFromSecret: grafana-postgres-datasource
+
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        uid: prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus-server.default.svc.cluster.local
+        isDefault: true
+        editable: true
+
+      - name: Healer PostgreSQL
+        uid: healer-postgres
+        type: postgres
+        access: proxy
+        url: postgres.default.svc.cluster.local:5432
+        database: healerdb
+        user: $__env{GRAFANA_POSTGRES_USER}
+        editable: true
+        jsonData:
+          sslmode: disable
+          postgresVersion: 1500
+          timescaledb: false
+        secureJsonData:
+          password: $__env{GRAFANA_POSTGRES_PASSWORD}
+
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+      - name: self-healing-platform
+        orgId: 1
+        folder: Self-Healing Cloud Platform
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/self-healing-platform
+
+dashboardsConfigMaps:
+  self-healing-platform: grafana-dashboard-self-healing-platform

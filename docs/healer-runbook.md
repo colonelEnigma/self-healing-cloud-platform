@@ -50,6 +50,12 @@ Kubernetes RBAC lives in:
 k8s/healer-service/rbac.yaml
 ```
 
+Grafana dashboard operations live in:
+
+```text
+docs/grafana-runbook.md
+```
+
 ## Verify Current State
 
 Check healer pod:
@@ -157,6 +163,14 @@ Check history:
 ```bash
 curl "http://localhost:7000/history?namespace=prod&deployment=payment-service&sort=desc&page=1&limit=5"
 ```
+
+Check Grafana:
+
+1. Open the `Self-Healing Cloud Platform` dashboard.
+2. Set `Environment` to `dev` or `prod`.
+3. Set `Service` to the deployment under test.
+4. Confirm `Service Health` recovers.
+5. Confirm `Latest Healing Actions` shows the new audit row from `healerdb.healing_actions`.
 
 ## Disable Prod Healing
 
