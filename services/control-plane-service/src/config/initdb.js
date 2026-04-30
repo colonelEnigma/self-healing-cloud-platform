@@ -1,12 +1,54 @@
+const { Pool } = require("pg");
 const pool = require("./db");
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const quoteIdentifier = (value) => `"${String(value).replace(/"/g, "\"\"")}"`;
+
+const ensureControlPlaneDatabaseExists = async () => {
+  const targetDatabase = process.env.DB_NAME;
+  const bootstrapDatabase = process.env.DB_BOOTSTRAP_DB || "postgres";
+
+  if (!targetDatabase) {
+    throw new Error("DB_NAME is required for control-plane-service");
+  }
+
+  const bootstrapPool = new Pool({
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT || 5432,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: bootstrapDatabase,
+  });
+
+  try {
+    const exists = await bootstrapPool.query(
+      "SELECT 1 FROM pg_database WHERE datname = $1",
+      [targetDatabase],
+    );
+
+    if (exists.rowCount === 0) {
+      await bootstrapPool.query(
+        `CREATE DATABASE ${quoteIdentifier(targetDatabase)}`,
+      );
+      console.log(`Created database ${targetDatabase}`);
+    }
+  } catch (err) {
+    if (err.code !== "42P04") {
+      throw err;
+    }
+  } finally {
+    await bootstrapPool.end().catch(() => {});
+  }
+};
 
 const initDb = async () => {
   let retries = 10;
 
   while (retries > 0) {
     try {
+      await ensureControlPlaneDatabaseExists();
+
       await pool.query(`
         CREATE TABLE IF NOT EXISTS control_plane_actions (
           id SERIAL PRIMARY KEY,
