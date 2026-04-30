@@ -98,8 +98,10 @@ def serviceConfigs() {
       serviceFile   : 'service.yaml',
       kafkaAware    : false,
       deployTargets : ['monitoring'],
-      extraManifestFiles: [
-        'k8s/control-plane-service/rbac.yaml',
+      preDeployManifestFiles: [
+        'k8s/control-plane-service/serviceaccount.yaml'
+      ],
+      postDeployManifestFiles: [
         'k8s/ingress/control-plane-monitoring-ingress.yaml'
       ]
     ]
@@ -218,6 +220,12 @@ def deployEnv(scriptRef, Map cfg, String targetEnv, String imageTag) {
     scriptRef.error("Deployment target must be one of ${allowedEnvs}; got '${targetEnv}'.")
   }
 
+  if (cfg.preDeployManifestFiles) {
+    cfg.preDeployManifestFiles.each { manifestFile ->
+      scriptRef.sh "kubectl apply -f ${manifestFile}"
+    }
+  }
+
   def topic = ''
   def dlq = ''
   def group = ''
@@ -290,8 +298,8 @@ def deployEnv(scriptRef, Map cfg, String targetEnv, String imageTag) {
     """
   }
 
-  if (cfg.extraManifestFiles) {
-    cfg.extraManifestFiles.each { manifestFile ->
+  if (cfg.postDeployManifestFiles) {
+    cfg.postDeployManifestFiles.each { manifestFile ->
       scriptRef.sh "kubectl apply -f ${manifestFile}"
     }
   }
