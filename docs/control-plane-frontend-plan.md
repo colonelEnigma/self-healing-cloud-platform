@@ -1,8 +1,7 @@
 ---
 title: Control Plane Frontend Plan
-status: planning
-updated: 2026-04-30
 status: in-progress
+updated: 2026-04-30
 tags:
   - control-plane
   - frontend
@@ -12,7 +11,7 @@ tags:
 
 # Control Plane Frontend Plan
 
-This is the docs-facing planning reference for the future frontend implementation phase.
+This is the docs-facing planning reference for the frontend direction and current UI-only Control Panel progress.
 
 Canonical planning handoff:
 
@@ -28,7 +27,7 @@ The frontend will be based on the existing Creative Tim Material Dashboard React
 C:\Users\ranja\Documents\projects\cloudpulse-ui
 ```
 
-Frontend implementation starts after the Control Plane backend is implemented and verified. Backend work remains first: `user-service` role support, `control-plane-service`, live prod Control Plane APIs, guarded scale actions, audit history, and narrow RBAC.
+UI-only Control Panel scaffolding has started in the frontend repo. Live Control Plane data integration and guarded actions still start after the Control Plane backend is implemented and verified. Backend work remains first: `user-service` role support, `control-plane-service`, live prod Control Plane APIs, guarded scale actions, audit history, and narrow RBAC.
 
 ## App Direction
 
@@ -66,7 +65,7 @@ Control Panel V1 will use five pages:
 
 ## Implementation Notes
 
-When frontend work begins:
+When frontend live/backend integration resumes:
 
 - Preserve the Creative Tim Material Dashboard foundation.
 - Use ingress-relative `/api/...` paths for deployed API calls.
@@ -80,9 +79,10 @@ When frontend work begins:
 - 2026-04-30: Control Panel UI scaffolding committed. The frontend now contains `src/layouts/control-panel/*` with placeholder pages and nested routing for Overview, Services (with drill-down), Logs, Incidents, and Audit.
 - Frontend auth handling improved: profile normalization from `localStorage` and API responses, and `AuthProvider` now waits for profile load when a token exists to avoid premature redirects.
 - Routing updated to `/control-panel/*` and `src/services/authService.js` login helper was adjusted to use the ingress-relative `/api/users/login` path.
+- Backend status as of 2026-04-30: `user-service` role support is locally verified, `control-plane-service` exists locally on port `7100`, `GET /api/control-plane/status` is implemented for admin JWTs, and the remaining Control Plane routes currently return `501` until live integrations are added.
 
 ## Deferred
 
-- Actual frontend implementation.
+- Live backend data integration and guarded action wiring.
 - Frontend Kubernetes/Jenkins deployment integration.
 - Final screenshots, README demo walkthrough, and UI polish.
