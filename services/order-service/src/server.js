@@ -46,11 +46,17 @@ app.get("/health", (req, res) => {
 const startServer = async () => {
   try {
     await initDb(); // ✅ wait for table creation
-    await connectProducer();
-
     app.listen(PORT, () => {
       console.log(`Order Service running on port ${PORT}`);
     });
+
+    // Start Kafka producer after HTTP is available so reads stay usable
+    // while Kafka is starting or temporarily unavailable in local development.
+    setTimeout(() => {
+      connectProducer().catch((err) => {
+        console.error("Order Kafka producer failed:", err.message);
+      });
+    }, 5000);
   } catch (err) {
     console.error("Failed to start server:", err);
     process.exit(1);

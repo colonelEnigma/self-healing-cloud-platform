@@ -15,8 +15,20 @@ const initDb = async () => {
           email VARCHAR(255) UNIQUE NOT NULL,
           password VARCHAR(255) NOT NULL,
           name VARCHAR(255) NOT NULL,
+          role VARCHAR(20) DEFAULT 'user',
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+      `);
+
+      await pool.query(`
+        ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'user';
+      `);
+
+      await pool.query(`
+        UPDATE users
+        SET role = 'user'
+        WHERE role IS NULL;
       `);
 
       console.log("Database initialized (users table ready)");

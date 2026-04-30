@@ -18,7 +18,7 @@ exports.registerUser = async (req, res) => {
     const result = await pool.query(
       `INSERT INTO users (email, password, name)
        VALUES ($1, $2, $3)
-       RETURNING id, email, name`,
+       RETURNING id, email, name, role`,
       [email, hashedPassword, name],
     );
 
@@ -65,7 +65,7 @@ exports.loginUser = async (req, res) => {
 
     // ✅ Create JWT
     const token = jwt.sign(
-      { id: user.id, email: user.email },
+      { id: user.id, email: user.email, role: user.role || "user" },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || "1d" },
     );
@@ -85,7 +85,7 @@ exports.getProfile = async (req, res) => {
     const userId = req.user.id;
 
     const result = await pool.query(
-      "SELECT id, email, name FROM users WHERE id = $1",
+      "SELECT id, email, name, COALESCE(role, 'user') AS role FROM users WHERE id = $1",
       [userId],
     );
 
@@ -133,7 +133,7 @@ exports.updateProfile = async (req, res) => {
       UPDATE users
       SET ${fields.join(", ")}
       WHERE id = $${index}
-      RETURNING id, name, email
+      RETURNING id, name, email, COALESCE(role, 'user') AS role
     `;
 
     const result = await pool.query(query, values);

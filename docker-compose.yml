@@ -90,11 +90,14 @@ services:
       DB_NAME: paymentdb_local
       JWT_SECRET: my_super_secret_key
       KAFKA_BROKER: kafka:9092
+      ORDER_SERVICE_URL: http://order-service:3003
       ORDER_CREATED_TOPIC: order_created_local
       ORDER_CREATED_DLQ_TOPIC: order_created_dlq_local
+      KAFKA_CONSUMER_GROUP: payment-group-local
     depends_on:
       - postgres
       - kafka
+      - order-service
 
   search-service:
     build: ./services/search-service
@@ -112,6 +115,7 @@ services:
       KAFKA_BROKER: kafka:9092
       ORDER_CREATED_TOPIC: order_created_local
       ORDER_CREATED_DLQ_TOPIC: order_created_dlq_local
+      KAFKA_CONSUMER_GROUP: search-group-local
     depends_on:
       - postgres
       - kafka
@@ -136,6 +140,19 @@ services:
     depends_on:
       - postgres
       - kafka
+
+  control-plane-service:
+    build: ./services/control-plane-service
+    image: control-plane-service:local
+    container_name: control-plane-service
+    ports:
+      - "7100:7100"
+    environment:
+      PORT: 7100
+      JWT_SECRET: my_super_secret_key
+      CORS_ORIGIN: http://localhost:3001
+    depends_on:
+      - user-service
 
   prometheus:
     image: prom/prometheus
