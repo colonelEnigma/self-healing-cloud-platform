@@ -134,8 +134,6 @@ spec:
             error 'Only one of jenkins/rollback.env or jenkins/promotion.env may contain a confirmed action in a single commit.'
           }
 
-          def commonChanged = changedFiles.any { it == 'Jenkinsfile' || it == 'jenkins/common.groovy' }
-
           if (env.IS_ROLLBACK == 'true' || env.IS_PROMOTION == 'true') {
             env.RUN_USER = 'false'
             env.RUN_ORDER = 'false'
@@ -145,7 +143,6 @@ spec:
             env.RUN_CONTROL_PLANE = 'false'
           } else {
             env.RUN_USER = (
-              commonChanged ||
               changedFiles.any {
                 it.startsWith('services/user-service/') ||
                 it.startsWith('k8s/user-service/') ||
@@ -154,7 +151,6 @@ spec:
             ) ? 'true' : 'false'
 
             env.RUN_ORDER = (
-              commonChanged ||
               changedFiles.any {
                 it.startsWith('services/order-service/') ||
                 it.startsWith('k8s/order-service/') ||
@@ -163,7 +159,6 @@ spec:
             ) ? 'true' : 'false'
 
             env.RUN_PRODUCT = (
-              commonChanged ||
               changedFiles.any {
                 it.startsWith('services/product-service/') ||
                 it.startsWith('k8s/product-service/') ||
@@ -172,7 +167,6 @@ spec:
             ) ? 'true' : 'false'
 
             env.RUN_PAYMENT = (
-              commonChanged ||
               changedFiles.any {
                 it.startsWith('services/payment-service/') ||
                 it.startsWith('k8s/payment-service/') ||
@@ -181,7 +175,6 @@ spec:
             ) ? 'true' : 'false'
 
             env.RUN_SEARCH = (
-              commonChanged ||
               changedFiles.any {
                 it.startsWith('services/search-service/') ||
                 it.startsWith('k8s/search-service/') ||
@@ -190,7 +183,6 @@ spec:
             ) ? 'true' : 'false'
 
             env.RUN_CONTROL_PLANE = (
-              commonChanged ||
               changedFiles.any {
                 it.startsWith('services/control-plane-service/') ||
                 it.startsWith('k8s/control-plane-service/') ||
