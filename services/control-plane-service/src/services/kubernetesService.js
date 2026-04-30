@@ -1,4 +1,5 @@
 const k8s = require("@kubernetes/client-node");
+const fs = require("fs");
 const { PassThrough } = require("stream");
 const { once } = require("events");
 const {
@@ -12,7 +13,27 @@ const strategicMergePatchOptions = {
   headers: { "Content-Type": "application/strategic-merge-patch+json" },
 };
 
+const IN_CLUSTER_TOKEN_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/token";
+const IN_CLUSTER_CA_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt";
+const IN_CLUSTER_NAMESPACE_PATH =
+  "/var/run/secrets/kubernetes.io/serviceaccount/namespace";
+
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const hasFile = (filePath) => {
+  try {
+    return fs.existsSync(filePath);
+  } catch (err) {
+    return false;
+  }
+};
+
+const hasInClusterCredentials = () =>
+  Boolean(process.env.KUBERNETES_SERVICE_HOST) &&
+  Boolean(process.env.KUBERNETES_SERVICE_PORT) &&
+  hasFile(IN_CLUSTER_TOKEN_PATH) &&
+  hasFile(IN_CLUSTER_CA_PATH) &&
+  hasFile(IN_CLUSTER_NAMESPACE_PATH);
 
 const getKubernetesClients = () => {
   if (cachedClients) {
@@ -21,19 +42,39 @@ const getKubernetesClients = () => {
 
   const kc = new k8s.KubeConfig();
   const loadErrors = [];
+  let loaded = false;
 
-  try {
-    kc.loadFromCluster();
-  } catch (clusterErr) {
-    loadErrors.push(clusterErr.message);
+  if (hasInClusterCredentials()) {
+    try {
+      kc.loadFromCluster();
+      loaded = true;
+    } catch (clusterErr) {
+      loadErrors.push(`in-cluster config failed: ${clusterErr.message}`);
+    }
+  } else if (
+    process.env.KUBERNETES_SERVICE_HOST ||
+    process.env.KUBERNETES_SERVICE_PORT
+  ) {
+    loadErrors.push(
+      "in-cluster env detected but service-account files are missing",
+    );
+  }
+
+  if (!loaded) {
     try {
       kc.loadFromDefault();
+      loaded = true;
     } catch (defaultErr) {
-      loadErrors.push(defaultErr.message);
-      throw new Error(
-        `Could not load Kubernetes config. Checked in-cluster and default config. ${loadErrors.join(" | ")}`,
-      );
+      loadErrors.push(`default kubeconfig failed: ${defaultErr.message}`);
     }
+  }
+
+  if (!loaded) {
+    throw new Error(
+      "Could not load Kubernetes config. " +
+        loadErrors.join(" | ") +
+        " | If testing locally via docker-compose, run control-plane-service in cluster or mount a kubeconfig into the container.",
+    );
   }
 
   cachedClients = {
