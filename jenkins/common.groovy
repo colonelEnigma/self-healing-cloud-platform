@@ -86,6 +86,22 @@ def serviceConfigs() {
       deploymentFile: 'deployment.yaml',
       serviceFile   : 'service.yaml',
       kafkaAware    : true
+    ],
+    'control-plane-service': [
+      serviceName   : 'control-plane-service',
+      awsRegion     : 'ap-south-1',
+      ecrRegistry   : '348071628290.dkr.ecr.ap-south-1.amazonaws.com',
+      ecrRepository : 'control-plane-service',
+      servicePath   : 'services/control-plane-service',
+      k8sPath       : 'k8s/control-plane-service',
+      deploymentFile: 'deployment.yaml',
+      serviceFile   : 'service.yaml',
+      kafkaAware    : false,
+      deployTargets : ['monitoring'],
+      extraManifestFiles: [
+        'k8s/control-plane-service/rbac.yaml',
+        'k8s/ingress/control-plane-monitoring-ingress.yaml'
+      ]
     ]
   ]
 }
@@ -146,15 +162,12 @@ def runService(scriptRef, Map cfg) {
         }
       }
 
-      scriptRef.stage("${cfg.serviceName} - Deploy to dev") {
-        scriptRef.container('devops') {
-          deployEnv(scriptRef, cfg, 'dev', scriptRef.env.IMAGE_TAG)
-        }
-      }
-
-      scriptRef.stage("${cfg.serviceName} - Deploy to test") {
-        scriptRef.container('devops') {
-          deployEnv(scriptRef, cfg, 'test', scriptRef.env.IMAGE_TAG)
+      def deployTargets = cfg.deployTargets ?: ['dev', 'test']
+      deployTargets.each { targetEnv ->
+        scriptRef.stage("${cfg.serviceName} - Deploy to ${targetEnv}") {
+          scriptRef.container('devops') {
+            deployEnv(scriptRef, cfg, targetEnv, scriptRef.env.IMAGE_TAG)
+          }
         }
       }
     }
@@ -164,6 +177,12 @@ def runService(scriptRef, Map cfg) {
 def promoteService(scriptRef, String serviceName, String targetEnv, String imageTag) {
   def cfg = configForService(serviceName)
   def allowedEnvs = ['prod']
+  def promotionAllowedServices = ['user-service', 'order-service', 'payment-service', 'product-service', 'search-service']
+
+  if (!promotionAllowedServices.contains(serviceName)) {
+    scriptRef.error("Promotion flow is only supported for app services. Unsupported service: '${serviceName}'.")
+  }
+
   if (!allowedEnvs.contains(targetEnv)) {
     scriptRef.error("Promotion target must be prod; got '${targetEnv}'. Dev and test deploy automatically from normal service changes.")
   }
@@ -194,7 +213,7 @@ def promoteService(scriptRef, String serviceName, String targetEnv, String image
 }
 
 def deployEnv(scriptRef, Map cfg, String targetEnv, String imageTag) {
-  def allowedEnvs = ['dev', 'test', 'prod']
+  def allowedEnvs = ['dev', 'test', 'prod', 'monitoring']
   if (!allowedEnvs.contains(targetEnv)) {
     scriptRef.error("Deployment target must be one of ${allowedEnvs}; got '${targetEnv}'.")
   }
@@ -269,6 +288,12 @@ def deployEnv(scriptRef, Map cfg, String targetEnv, String imageTag) {
 
       kubectl rollout status deployment/${cfg.serviceName} -n ${targetEnv}
     """
+  }
+
+  if (cfg.extraManifestFiles) {
+    cfg.extraManifestFiles.each { manifestFile ->
+      scriptRef.sh "kubectl apply -f ${manifestFile}"
+    }
   }
 }
 

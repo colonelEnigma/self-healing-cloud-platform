@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: control-plane-service
+  namespace: ${NAMESPACE}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: control-plane-service
+  template:
+    metadata:
+      labels:
+        app: control-plane-service
+    spec:
+      serviceAccountName: control-plane-service
+      containers:
+        - name: control-plane-service
+          image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/control-plane-service:${IMAGE_TAG}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 7100
+          env:
+            - name: PORT
+              value: "7100"
+            - name: DB_HOST
+              value: "postgres.default.svc.cluster.local"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_USER
+              value: "admin"
+            - name: DB_PASSWORD
+              value: "admin"
+            - name: DB_NAME
+              value: "controlplanedb"
+            - name: JWT_SECRET
+              value: "my_super_secret_key"
+            - name: PROMETHEUS_BASE_URL
+              value: "http://prometheus-server.default.svc.cluster.local"
+            - name: HEALER_BASE_URL
+              value: "http://healer-service.default.svc.cluster.local:7000"
+            - name: CORS_ORIGIN
+              value: "http://localhost:3001"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 7100
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 7100
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"

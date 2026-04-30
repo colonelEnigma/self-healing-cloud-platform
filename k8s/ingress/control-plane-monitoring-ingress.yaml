@@ -1,0 +1,17 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: shcp-control-plane-ingress
+  namespace: monitoring
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /api/control-plane
+            pathType: Prefix
+            backend:
+              service:
+                name: control-plane-service
+                port:
+                  number: 7100

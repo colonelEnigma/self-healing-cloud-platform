@@ -1,6 +1,7 @@
 require("dotenv").config();
 
 const app = require("./app");
+const initDb = require("./config/initdb");
 
 const PORT = process.env.PORT || 7100;
 
@@ -9,6 +10,17 @@ if (!process.env.JWT_SECRET) {
   process.exit(1);
 }
 
-app.listen(PORT, () => {
-  console.log(`Control Plane Service running on port ${PORT}`);
-});
+const startServer = async () => {
+  try {
+    await initDb();
+
+    app.listen(PORT, () => {
+      console.log(`Control Plane Service running on port ${PORT}`);
+    });
+  } catch (err) {
+    console.error("Failed to start control-plane-service:", err.message);
+    process.exit(1);
+  }
+};
+
+startServer();

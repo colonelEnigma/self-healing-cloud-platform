@@ -9,3 +9,4 @@ data:
     CREATE DATABASE paymentdb;
     CREATE DATABASE searchdb;
     CREATE DATABASE productdb;
+    CREATE DATABASE controlplanedb;

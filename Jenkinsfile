@@ -142,6 +142,7 @@ spec:
             env.RUN_PRODUCT = 'false'
             env.RUN_PAYMENT = 'false'
             env.RUN_SEARCH = 'false'
+            env.RUN_CONTROL_PLANE = 'false'
           } else {
             env.RUN_USER = (
               commonChanged ||
@@ -187,6 +188,16 @@ spec:
                 it == 'jenkins/search-service.groovy'
               }
             ) ? 'true' : 'false'
+
+            env.RUN_CONTROL_PLANE = (
+              commonChanged ||
+              changedFiles.any {
+                it.startsWith('services/control-plane-service/') ||
+                it.startsWith('k8s/control-plane-service/') ||
+                it == 'k8s/ingress/control-plane-monitoring-ingress.yaml' ||
+                it == 'jenkins/control-plane-service.groovy'
+              }
+            ) ? 'true' : 'false'
           }
 
           echo "Changed files: ${changedFiles}"
@@ -207,6 +218,7 @@ spec:
           echo "RUN_PRODUCT=${env.RUN_PRODUCT}"
           echo "RUN_PAYMENT=${env.RUN_PAYMENT}"
           echo "RUN_SEARCH=${env.RUN_SEARCH}"
+          echo "RUN_CONTROL_PLANE=${env.RUN_CONTROL_PLANE}"
         }
       }
     }
@@ -382,12 +394,18 @@ spec:
             svc.run(this)
           }
 
+          if (env.RUN_CONTROL_PLANE == 'true') {
+            def svc = load 'jenkins/control-plane-service.groovy'
+            svc.run(this)
+          }
+
           if (
             env.RUN_USER != 'true' &&
             env.RUN_ORDER != 'true' &&
             env.RUN_PRODUCT != 'true' &&
             env.RUN_PAYMENT != 'true' &&
-            env.RUN_SEARCH != 'true'
+            env.RUN_SEARCH != 'true' &&
+            env.RUN_CONTROL_PLANE != 'true'
           ) {
             echo 'No service changes detected.'
           }
