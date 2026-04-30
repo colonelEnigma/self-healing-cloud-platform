@@ -98,6 +98,11 @@ def serviceConfigs() {
       serviceFile   : 'service.yaml',
       kafkaAware    : false,
       deployTargets : ['monitoring'],
+      dbBootstrapJob: [
+        file     : 'k8s/control-plane-service/controlplanedb-bootstrap-job.yaml',
+        namespace: 'monitoring',
+        name     : 'controlplanedb-bootstrap'
+      ],
       preDeployManifestFiles: [
         'k8s/control-plane-service/serviceaccount.yaml'
       ],
@@ -218,6 +223,22 @@ def deployEnv(scriptRef, Map cfg, String targetEnv, String imageTag) {
   def allowedEnvs = ['dev', 'test', 'prod', 'monitoring']
   if (!allowedEnvs.contains(targetEnv)) {
     scriptRef.error("Deployment target must be one of ${allowedEnvs}; got '${targetEnv}'.")
+  }
+
+  if (cfg.dbBootstrapJob) {
+    def jobFile = cfg.dbBootstrapJob.file
+    def jobNamespace = cfg.dbBootstrapJob.namespace
+    def jobName = cfg.dbBootstrapJob.name
+
+    scriptRef.sh """
+      kubectl delete job ${jobName} -n ${jobNamespace} --ignore-not-found=true
+      kubectl apply -f ${jobFile}
+
+      if ! kubectl wait --for=condition=complete job/${jobName} -n ${jobNamespace} --timeout=180s; then
+        kubectl logs job/${jobName} -n ${jobNamespace} || true
+        exit 1
+      fi
+    """
   }
 
   if (cfg.preDeployManifestFiles) {
