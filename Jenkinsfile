@@ -74,9 +74,9 @@ spec:
           env.ROLLBACK_SERVICE = ''
           env.ROLLBACK_NAMESPACE = ''
           env.ROLLBACK_IMAGE_TAG = ''
-          env.PROMOTE_SERVICE = ''
           env.PROMOTE_NAMESPACE = ''
-          env.PROMOTE_IMAGE_TAG = ''
+          env.PROMOTE_SERVICES = ''
+          env.PROMOTION_PLAN = ''
 
           def parseEnvFile = { filePath ->
             def cfg = [:]
@@ -112,21 +112,64 @@ spec:
 
           if (env.PROMOTION_FILE_CHANGED == 'true' && fileExists('jenkins/promotion.env')) {
             def promotionCfg = parseEnvFile('jenkins/promotion.env')
+            def allowedPromotionServices = [
+              'user-service',
+              'order-service',
+              'payment-service',
+              'product-service',
+              'search-service'
+            ]
+
+            def parsePromotionItems = { rawValue ->
+              def parsed = []
+              rawValue.split(/\s*[,&]\s*/).each { token ->
+                def item = token?.trim()
+                if (item) {
+                  def parts = item.split(':', 2)
+                  if (parts.size() != 2 || !parts[0].trim() || !parts[1].trim()) {
+                    error "Invalid PROMOTE_SERVICES entry '${item}'. Expected format: service:imageTag"
+                  }
+
+                  def service = parts[0].trim()
+                  def imageTag = parts[1].trim()
+
+                  if (!allowedPromotionServices.contains(service)) {
+                    error "Unsupported promotion service in PROMOTE_SERVICES: '${service}'"
+                  }
+
+                  if (!(imageTag ==~ /^[A-Za-z0-9_.-]+$/)) {
+                    error "Invalid promotion image tag in PROMOTE_SERVICES for '${service}': '${imageTag}'"
+                  }
+
+                  parsed << "${service}:${imageTag}"
+                }
+              }
+              return parsed
+            }
 
             env.PROMOTION_ACTION_VALUE   = promotionCfg['ACTION'] ?: ''
-            env.PROMOTE_SERVICE          = promotionCfg['PROMOTE_SERVICE'] ?: ''
             env.PROMOTE_NAMESPACE        = promotionCfg['PROMOTE_NAMESPACE'] ?: ''
-            env.PROMOTE_IMAGE_TAG        = promotionCfg['PROMOTE_IMAGE_TAG'] ?: ''
+            env.PROMOTE_SERVICES         = promotionCfg['PROMOTE_SERVICES'] ?: ''
             env.CONFIRM_PROMOTION_VALUE  = promotionCfg['CONFIRM_PROMOTION'] ?: ''
 
             if (
               env.PROMOTION_ACTION_VALUE == 'promote' &&
               env.CONFIRM_PROMOTION_VALUE == 'true' &&
-              env.PROMOTE_SERVICE?.trim() &&
               env.PROMOTE_NAMESPACE?.trim() &&
-              env.PROMOTE_IMAGE_TAG?.trim()
+              env.PROMOTE_SERVICES?.trim()
             ) {
-              env.IS_PROMOTION = 'true'
+              def promotionItems = parsePromotionItems(env.PROMOTE_SERVICES)
+
+              if (promotionItems && !promotionItems.isEmpty()) {
+                def serviceNames = promotionItems.collect { entry -> entry.split(':', 2)[0] }
+                def duplicateService = serviceNames.find { service -> serviceNames.count(service) > 1 }
+                if (duplicateService) {
+                  error "Duplicate service '${duplicateService}' found in promotion request. Keep one entry per service."
+                }
+
+                env.PROMOTION_PLAN = promotionItems.join(',')
+                env.IS_PROMOTION = 'true'
+              }
             }
           }
 
@@ -202,9 +245,9 @@ spec:
           echo "ROLLBACK_SERVICE=${env.ROLLBACK_SERVICE}"
           echo "ROLLBACK_NAMESPACE=${env.ROLLBACK_NAMESPACE}"
           echo "ROLLBACK_IMAGE_TAG=${env.ROLLBACK_IMAGE_TAG}"
-          echo "PROMOTE_SERVICE=${env.PROMOTE_SERVICE}"
           echo "PROMOTE_NAMESPACE=${env.PROMOTE_NAMESPACE}"
-          echo "PROMOTE_IMAGE_TAG=${env.PROMOTE_IMAGE_TAG}"
+          echo "PROMOTE_SERVICES=${env.PROMOTE_SERVICES}"
+          echo "PROMOTION_PLAN=${env.PROMOTION_PLAN}"
           echo "RUN_USER=${env.RUN_USER}"
           echo "RUN_ORDER=${env.RUN_ORDER}"
           echo "RUN_PRODUCT=${env.RUN_PRODUCT}"
@@ -274,7 +317,17 @@ spec:
           checkout scm
           script {
             def common = load 'jenkins/common.groovy'
-            common.promoteService(this, env.PROMOTE_SERVICE, env.PROMOTE_NAMESPACE, env.PROMOTE_IMAGE_TAG)
+            if (!env.PROMOTION_PLAN?.trim()) {
+              error 'PROMOTION_PLAN is empty. Provide PROMOTE_SERVICES in jenkins/promotion.env (service:imageTag list).'
+            }
+
+            def promotionItems = env.PROMOTION_PLAN.split(',').collect { it.trim() }.findAll { it }
+            promotionItems.each { item ->
+              def parts = item.split(':', 2)
+              def serviceName = parts[0].trim()
+              def imageTag = parts[1].trim()
+              common.promoteService(this, serviceName, env.PROMOTE_NAMESPACE, imageTag)
+            }
           }
         }
       }
