@@ -5,7 +5,7 @@ tags:
   - ci-cd
   - promotion
   - runbook
-updated: 2026-04-29
+updated: 2026-05-01
 related:
   - rollback-runbook
 ---
@@ -13,7 +13,7 @@ related:
 # Jenkins Promotion Runbook
 
 > [!summary] Current model
-> Normal service commits build one short-SHA image and automatically deploy it to `dev` and `test`. Production deployment is a separate Git-controlled promotion through `jenkins/promotion.env`.
+> Normal service commits build one short-SHA image and automatically deploy it to `dev` and `test`. A confirmed promotion commit builds changed app services, verifies them through `dev` and `test`, and promotes the same current short-SHA images to `prod`.
 
 ## Quick Facts
 
@@ -32,17 +32,14 @@ related:
 ## Flow
 
 ```text
-service change commit
--> Jenkins detects changed services
--> Buildah builds one image per changed service
--> Jenkins tags the image with the short Git SHA
--> Jenkins pushes the image to ECR
--> Jenkins deploys the image to dev
--> Jenkins deploys the same image to test
-
-promotion.env commit
--> Jenkins skips build
--> Jenkins deploys the existing image tag to prod
+confirmed promotion commit with app service changes
+-> Jenkins detects changed app services
+-> Buildah builds one image per changed app service
+-> Jenkins tags each image with the current short Git SHA
+-> Jenkins pushes images to ECR
+-> Jenkins deploys changed app services to dev
+-> Jenkins deploys changed app services to test
+-> Jenkins promotes the same current short-SHA images to prod
 ```
 
 Image format:
@@ -59,9 +56,7 @@ Default inactive state:
 
 ```env
 ACTION=none
-PROMOTE_SERVICE=
 PROMOTE_NAMESPACE=prod
-PROMOTE_IMAGE_TAG=
 CONFIRM_PROMOTION=false
 ```
 
@@ -69,43 +64,46 @@ Confirmed prod promotion:
 
 ```env
 ACTION=promote
-PROMOTE_SERVICE=payment-service
 PROMOTE_NAMESPACE=prod
-PROMOTE_IMAGE_TAG=<short-git-sha-proven-in-test>
 CONFIRM_PROMOTION=true
 ```
 
 Required values:
 
 - `ACTION=promote`
-- `PROMOTE_SERVICE` is one of the supported app services.
 - `PROMOTE_NAMESPACE=prod`
-- `PROMOTE_IMAGE_TAG` is an existing ECR image tag.
 - `CONFIRM_PROMOTION=true`
+- The same commit must include changes under one or more supported app service paths.
+
+Supported app service paths:
+
+- `services/user-service/`, `k8s/user-service/`, `jenkins/user-service.groovy`
+- `services/order-service/`, `k8s/order-service/`, `jenkins/order-service.groovy`
+- `services/payment-service/`, `k8s/payment-service/`, `jenkins/payment-service.groovy`
+- `services/product-service/`, `k8s/product-service/`, `jenkins/product-service.groovy`
+- `services/search-service/`, `k8s/search-service/`, `jenkins/search-service.groovy`
 
 ## Procedure
 
-1. Push the service change and let Jenkins deploy it to `dev` and `test`.
+1. Make the app service changes that should go to prod.
 
-2. Verify the deployed image in `test`.
+2. Confirm prod promotion in `jenkins/promotion.env`.
 
-```bash
-SERVICE=payment-service
-kubectl rollout status deployment/$SERVICE -n test
-kubectl get pods -n test -l app=$SERVICE
-kubectl get deployment $SERVICE -n test \
-  -o jsonpath='{.spec.template.spec.containers[0].image}'
+```env
+ACTION=promote
+PROMOTE_NAMESPACE=prod
+CONFIRM_PROMOTION=true
 ```
 
-3. Edit `jenkins/promotion.env` with the same image tag that was verified in `test`.
-
-4. Commit and push the prod promotion request.
+3. Commit the service changes and `jenkins/promotion.env` together.
 
 ```bash
-git add jenkins/promotion.env
-git commit -m "Promote payment-service to prod"
+git add services/order-service jenkins/promotion.env
+git commit -m "Promote order-service changes to prod"
 git push
 ```
+
+4. Jenkins detects changed app services, builds the current short-SHA image, deploys to `dev` and `test`, then promotes the same image to `prod`.
 
 5. Verify `prod`.
 
@@ -113,42 +111,33 @@ git push
 
 ```env
 ACTION=none
-PROMOTE_SERVICE=
 PROMOTE_NAMESPACE=prod
-PROMOTE_IMAGE_TAG=
 CONFIRM_PROMOTION=false
 ```
 
 ## Example
 
-Scenario: `payment-service` image tag `def5678` was built by Jenkins and verified in `dev` and `test`.
-
-Set `jenkins/promotion.env` to:
-
-```env
-ACTION=promote
-PROMOTE_SERVICE=payment-service
-PROMOTE_NAMESPACE=prod
-PROMOTE_IMAGE_TAG=def5678
-CONFIRM_PROMOTION=true
-```
-
-Commit and push:
+Scenario: `order-service` and `payment-service` changed in the same commit and should both go to prod.
 
 ```bash
-git add jenkins/promotion.env
-git commit -m "Promote payment-service to prod"
+git add services/order-service services/payment-service jenkins/promotion.env
+git commit -m "Promote order and payment service changes to prod"
 git push
 ```
+
+If the current short SHA is `def5678`, Jenkins creates this promotion plan automatically:
 
 Expected Jenkins behavior:
 
 ```text
 Detect Changed Services
 -> IS_PROMOTION=true
--> skip normal service builds
--> render payment-service manifests for prod
--> deploy existing payment-service:def5678 image to prod
+-> PROMOTION_MODE=changed-services-current-sha
+-> PROMOTION_PLAN=order-service:def5678,payment-service:def5678
+-> build and deploy order-service:def5678 to dev and test
+-> promote order-service:def5678 to prod
+-> build and deploy payment-service:def5678 to dev and test
+-> promote payment-service:def5678 to prod
 -> wait for rollout status
 ```
 
@@ -162,11 +151,11 @@ Jenkins compares the current commit with `GIT_PREVIOUS_SUCCESSFUL_COMMIT` when J
 git diff --name-only HEAD~1 HEAD
 ```
 
-Promotion mode starts only when the diff includes `jenkins/promotion.env` and the file contains a confirmed promotion request.
+Promotion mode starts only when the diff includes `jenkins/promotion.env`, the file contains a confirmed promotion request, and the same diff includes at least one supported app service change.
 
 Only one confirmed action is allowed per commit. Do not confirm promotion and rollback in the same commit.
 
-Promotion is idempotent: if `prod` already runs the requested image, Jenkins verifies rollout status and exits without reapplying manifests.
+Promotion is idempotent: if `prod` already runs the requested current-SHA image, Jenkins verifies rollout status and exits without reapplying manifests for that service.
 
 ## Manifest Rendering
 
@@ -249,15 +238,15 @@ If Jenkins does not enter promotion mode:
 - Confirm `jenkins/promotion.env` changed in the pushed commit.
 - Confirm `ACTION=promote`.
 - Confirm `CONFIRM_PROMOTION=true`.
-- Confirm service, namespace, and image tag are populated.
+- Confirm `PROMOTE_NAMESPACE=prod`.
+- Confirm the same commit changed at least one supported app service path.
 - Confirm `jenkins/rollback.env` is not also confirmed in the same commit.
 
 If promotion fails validation:
 
-- Confirm `PROMOTE_SERVICE` is one of the supported services.
 - Confirm `PROMOTE_NAMESPACE=prod`.
-- Confirm the image tag contains only normal tag characters.
-- Confirm the image tag exists in ECR.
+- Confirm changed files are under supported app service paths.
+- Confirm the generated short-SHA image was built and pushed successfully.
 
 If rollout fails:
 

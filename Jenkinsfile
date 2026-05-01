@@ -54,6 +54,10 @@ spec:
             script: 'git rev-parse HEAD',
             returnStdout: true
           ).trim()
+          def currentShortCommit = sh(
+            script: 'git rev-parse --short HEAD',
+            returnStdout: true
+          ).trim()
 
           def previousSuccessfulCommit = env.GIT_PREVIOUS_SUCCESSFUL_COMMIT ?: ''
           def diffBase = previousSuccessfulCommit?.trim() ? previousSuccessfulCommit.trim() : 'HEAD~1'
@@ -65,6 +69,7 @@ spec:
 
           def changedFiles = changedFilesRaw ? changedFilesRaw.split('\n') : []
           env.CURRENT_COMMIT = currentCommit
+          env.CURRENT_SHORT_COMMIT = currentShortCommit
           env.DIFF_BASE_COMMIT = diffBase
 
           env.ROLLBACK_FILE_CHANGED = changedFiles.contains('jenkins/rollback.env') ? 'true' : 'false'
@@ -77,6 +82,7 @@ spec:
           env.PROMOTE_NAMESPACE = ''
           env.PROMOTE_SERVICES = ''
           env.PROMOTION_PLAN = ''
+          env.PROMOTION_MODE = ''
 
           def parseEnvFile = { filePath ->
             def cfg = [:]
@@ -120,55 +126,72 @@ spec:
               'search-service'
             ]
 
-            def parsePromotionItems = { rawValue ->
-              def parsed = []
-              rawValue.split(/\s*[,&]\s*/).each { token ->
-                def item = token?.trim()
-                if (item) {
-                  def parts = item.split(':', 2)
-                  if (parts.size() != 2 || !parts[0].trim() || !parts[1].trim()) {
-                    error "Invalid PROMOTE_SERVICES entry '${item}'. Expected format: service:imageTag"
-                  }
-
-                  def service = parts[0].trim()
-                  def imageTag = parts[1].trim()
-
-                  if (!allowedPromotionServices.contains(service)) {
-                    error "Unsupported promotion service in PROMOTE_SERVICES: '${service}'"
-                  }
-
-                  if (!(imageTag ==~ /^[A-Za-z0-9_.-]+$/)) {
-                    error "Invalid promotion image tag in PROMOTE_SERVICES for '${service}': '${imageTag}'"
-                  }
-
-                  parsed << "${service}:${imageTag}"
-                }
-              }
-              return parsed
-            }
-
             env.PROMOTION_ACTION_VALUE   = promotionCfg['ACTION'] ?: ''
             env.PROMOTE_NAMESPACE        = promotionCfg['PROMOTE_NAMESPACE'] ?: ''
-            env.PROMOTE_SERVICES         = promotionCfg['PROMOTE_SERVICES'] ?: ''
             env.CONFIRM_PROMOTION_VALUE  = promotionCfg['CONFIRM_PROMOTION'] ?: ''
 
             if (
               env.PROMOTION_ACTION_VALUE == 'promote' &&
               env.CONFIRM_PROMOTION_VALUE == 'true' &&
-              env.PROMOTE_NAMESPACE?.trim() &&
-              env.PROMOTE_SERVICES?.trim()
+              env.PROMOTE_NAMESPACE?.trim()
             ) {
-              def promotionItems = parsePromotionItems(env.PROMOTE_SERVICES)
+              if (env.PROMOTE_NAMESPACE != 'prod') {
+                error "Promotion target must be prod; got '${env.PROMOTE_NAMESPACE}'."
+              }
 
-              if (promotionItems && !promotionItems.isEmpty()) {
-                def serviceNames = promotionItems.collect { entry -> entry.split(':', 2)[0] }
-                def duplicateService = serviceNames.find { service -> serviceNames.count(service) > 1 }
-                if (duplicateService) {
-                  error "Duplicate service '${duplicateService}' found in promotion request. Keep one entry per service."
+              def changedPromotionServices = []
+
+              def serviceChangeRules = [
+                'user-service': { files ->
+                  files.any {
+                    it.startsWith('services/user-service/') ||
+                    it.startsWith('k8s/user-service/') ||
+                    it == 'jenkins/user-service.groovy'
+                  }
+                },
+                'order-service': { files ->
+                  files.any {
+                    it.startsWith('services/order-service/') ||
+                    it.startsWith('k8s/order-service/') ||
+                    it == 'jenkins/order-service.groovy'
+                  }
+                },
+                'payment-service': { files ->
+                  files.any {
+                    it.startsWith('services/payment-service/') ||
+                    it.startsWith('k8s/payment-service/') ||
+                    it == 'jenkins/payment-service.groovy'
+                  }
+                },
+                'product-service': { files ->
+                  files.any {
+                    it.startsWith('services/product-service/') ||
+                    it.startsWith('k8s/product-service/') ||
+                    it == 'jenkins/product-service.groovy'
+                  }
+                },
+                'search-service': { files ->
+                  files.any {
+                    it.startsWith('services/search-service/') ||
+                    it.startsWith('k8s/search-service/') ||
+                    it == 'jenkins/search-service.groovy'
+                  }
                 }
+              ]
 
-                env.PROMOTION_PLAN = promotionItems.join(',')
+              allowedPromotionServices.each { service ->
+                if (serviceChangeRules[service](changedFiles)) {
+                  changedPromotionServices << service
+                }
+              }
+
+              if (changedPromotionServices && !changedPromotionServices.isEmpty()) {
+                env.PROMOTION_PLAN = changedPromotionServices.collect { service -> "${service}:${env.CURRENT_SHORT_COMMIT}" }.join(',')
+                env.PROMOTE_SERVICES = changedPromotionServices.join(',')
+                env.PROMOTION_MODE = 'changed-services-current-sha'
                 env.IS_PROMOTION = 'true'
+              } else {
+                error 'Promotion was confirmed, but no supported app service changes were detected in this commit.'
               }
             }
           }
@@ -237,6 +260,7 @@ spec:
 
           echo "Changed files: ${changedFiles}"
           echo "CURRENT_COMMIT=${env.CURRENT_COMMIT}"
+          echo "CURRENT_SHORT_COMMIT=${env.CURRENT_SHORT_COMMIT}"
           echo "DIFF_BASE_COMMIT=${env.DIFF_BASE_COMMIT}"
           echo "ROLLBACK_FILE_CHANGED=${env.ROLLBACK_FILE_CHANGED}"
           echo "PROMOTION_FILE_CHANGED=${env.PROMOTION_FILE_CHANGED}"
@@ -247,6 +271,7 @@ spec:
           echo "ROLLBACK_IMAGE_TAG=${env.ROLLBACK_IMAGE_TAG}"
           echo "PROMOTE_NAMESPACE=${env.PROMOTE_NAMESPACE}"
           echo "PROMOTE_SERVICES=${env.PROMOTE_SERVICES}"
+          echo "PROMOTION_MODE=${env.PROMOTION_MODE}"
           echo "PROMOTION_PLAN=${env.PROMOTION_PLAN}"
           echo "RUN_USER=${env.RUN_USER}"
           echo "RUN_ORDER=${env.RUN_ORDER}"
@@ -318,7 +343,7 @@ spec:
           script {
             def common = load 'jenkins/common.groovy'
             if (!env.PROMOTION_PLAN?.trim()) {
-              error 'PROMOTION_PLAN is empty. Provide PROMOTE_SERVICES in jenkins/promotion.env (service:imageTag list).'
+              error 'PROMOTION_PLAN is empty. Confirm promotion with service changes in the same commit.'
             }
 
             def promotionItems = env.PROMOTION_PLAN.split(',').collect { it.trim() }.findAll { it }
@@ -326,6 +351,7 @@ spec:
               def parts = item.split(':', 2)
               def serviceName = parts[0].trim()
               def imageTag = parts[1].trim()
+              common.runNamedServiceToTargets(this, serviceName, ['dev', 'test'])
               common.promoteService(this, serviceName, env.PROMOTE_NAMESPACE, imageTag)
             }
           }

@@ -5,6 +5,7 @@ require("dotenv").config();
 
 const initDb = require("./config/initdb");
 const orderRoutes = require("./routes/orderRoutes");
+const internalRoutes = require("./routes/internalRoutes");
 const { client } = require("./metrics/metrics");
 const metricsMiddleware = require("./middleware/metricsMiddleware");
 const globalLimiter = require("./middleware/rateLimiter");
@@ -21,6 +22,7 @@ app.use(
 
 app.use(express.json());
 
+app.use("/internal", internalRoutes);
 app.use("/api", orderRoutes);
 
 // add middleware

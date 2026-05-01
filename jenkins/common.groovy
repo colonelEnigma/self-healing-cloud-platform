@@ -120,6 +120,11 @@ def runNamedService(scriptRef, String serviceName) {
   runService(scriptRef, configForService(serviceName))
 }
 
+def runNamedServiceToTargets(scriptRef, String serviceName, List deployTargets) {
+  def cfg = configForService(serviceName) + [deployTargets: deployTargets]
+  runService(scriptRef, cfg)
+}
+
 def runService(scriptRef, Map cfg) {
   scriptRef.podTemplate(yaml: podYaml(), defaultContainer: 'devops') {
     scriptRef.node(scriptRef.POD_LABEL) {

@@ -158,9 +158,11 @@ services:
       DB_NAME: controlplanedb_local
       PROMETHEUS_BASE_URL: http://prometheus:9090
       HEALER_BASE_URL: http://healer-service:7000
+      ORDER_SERVICE_BASE_URL: http://order-service:3003
     depends_on:
       - postgres
       - user-service
+      - order-service
       - prometheus
 
   prometheus:

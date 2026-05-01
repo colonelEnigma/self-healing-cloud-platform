@@ -9,6 +9,7 @@ const {
   getServiceDetail,
   getHealingHistoryHandler,
   getAlerts,
+  getResilience,
   getCombinedLogs,
   getServiceLogsHandler,
   getServiceEventsHandler,
@@ -31,6 +32,7 @@ router.get(
 );
 router.get("/healing-history", getHealingHistoryHandler);
 router.get("/alerts", getAlerts);
+router.get("/resilience", getResilience);
 router.get("/logs", getCombinedLogs);
 router.get(
   "/logs/:service",

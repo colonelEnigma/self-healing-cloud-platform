@@ -19,7 +19,12 @@ const {
   getServiceHealthFromPrometheus,
   getAlertsFromPrometheus,
   getHealingHistory,
+  getOrderServiceResilience,
 } = require("../services/externalReadService");
+const {
+  HEALER_SERVICE_DOWN_POLICY,
+  MANUAL_SCALE_GUARD,
+} = require("../config/resilience");
 
 const clampInteger = (value, fallback, min, max) => {
   const parsed = Number.parseInt(value, 10);
@@ -274,6 +279,127 @@ const getAlerts = async (req, res) => {
   }
 };
 
+const isWithinWindow = (createdAt, windowMinutes) => {
+  const createdTime = new Date(createdAt || 0).getTime();
+  if (!createdTime) {
+    return false;
+  }
+
+  return Date.now() - createdTime <= windowMinutes * 60 * 1000;
+};
+
+const summarizeReasons = (actions = []) =>
+  actions.reduce((acc, action) => {
+    const reason = action.reason || "unspecified";
+    acc[reason] = (acc[reason] || 0) + 1;
+    return acc;
+  }, {});
+
+const buildHealerResilienceState = (actions = []) => {
+  const policy = HEALER_SERVICE_DOWN_POLICY;
+
+  return ALLOWED_APP_DEPLOYMENTS.map((service) => {
+    const serviceActions = actions.filter(
+      (action) =>
+        action.deployment === service &&
+        action.namespace === CONTROL_PLANE_NAMESPACE &&
+        action.alert_name === policy.alertName,
+    );
+
+    const recentFailures = serviceActions.filter(
+      (action) =>
+        ["error", "failed"].includes(action.result) &&
+        isWithinWindow(
+          action.created_at,
+          policy.circuitBreaker.windowMinutes,
+        ),
+    );
+    const recentRateLimitActions = serviceActions.filter(
+      (action) =>
+        ["success", "failed"].includes(action.result) &&
+        isWithinWindow(action.created_at, policy.rateLimit.windowMinutes),
+    );
+    const recentBlockedActions = serviceActions.filter(
+      (action) =>
+        action.result === "blocked" &&
+        isWithinWindow(
+          action.created_at,
+          policy.circuitBreaker.windowMinutes,
+        ),
+    );
+
+    return {
+      service,
+      circuitBreaker: {
+        state:
+          recentFailures.length >= policy.circuitBreaker.failureThreshold
+            ? "open"
+            : "closed",
+        failureCount: recentFailures.length,
+        failureThreshold: policy.circuitBreaker.failureThreshold,
+        windowMinutes: policy.circuitBreaker.windowMinutes,
+      },
+      rateLimit: {
+        state:
+          recentRateLimitActions.length >= policy.rateLimit.maxActionsPerWindow
+            ? "limited"
+            : "available",
+        actionCount: recentRateLimitActions.length,
+        maxActionsPerWindow: policy.rateLimit.maxActionsPerWindow,
+        windowMinutes: policy.rateLimit.windowMinutes,
+      },
+      cooldownSeconds: policy.cooldownSeconds,
+      retry: policy.retry,
+      recentBlockedReasonCounts: summarizeReasons(recentBlockedActions),
+      lastAction: serviceActions[0] || null,
+    };
+  });
+};
+
+const getResilience = async (req, res) => {
+  const warnings = [];
+  let healingHistory = { actions: [] };
+  let orderServiceResilience = null;
+
+  try {
+    healingHistory = await getHealingHistory({
+      alertName: HEALER_SERVICE_DOWN_POLICY.alertName,
+      limit: 100,
+      page: 1,
+    });
+  } catch (err) {
+    warnings.push(`healer history unavailable: ${err.message}`);
+  }
+
+  try {
+    orderServiceResilience = await getOrderServiceResilience();
+  } catch (err) {
+    warnings.push(`order-service resilience status unavailable: ${err.message}`);
+  }
+
+  return res.status(200).json({
+    namespace: CONTROL_PLANE_NAMESPACE,
+    generatedAt: new Date().toISOString(),
+    mechanisms: {
+      healerServiceDownPolicy: {
+        ...HEALER_SERVICE_DOWN_POLICY,
+        allowedNamespaces: [CONTROL_PLANE_NAMESPACE],
+        allowedDeployments: ALLOWED_APP_DEPLOYMENTS,
+        serviceState: buildHealerResilienceState(
+          healingHistory.actions || [],
+        ),
+      },
+      orderProductCircuitBreaker: orderServiceResilience,
+      manualScaleGuard: {
+        ...MANUAL_SCALE_GUARD,
+        namespace: CONTROL_PLANE_NAMESPACE,
+        allowedDeployments: ALLOWED_APP_DEPLOYMENTS,
+      },
+    },
+    warnings,
+  });
+};
+
 const getCombinedLogs = async (req, res) => {
   const tailLines = clampInteger(req.query.tailLines, 100, 10, 500);
   const logs = [];
@@ -519,6 +645,7 @@ module.exports = {
   getServiceDetail,
   getHealingHistoryHandler,
   getAlerts,
+  getResilience,
   getCombinedLogs,
   getServiceLogsHandler,
   getServiceEventsHandler,

@@ -17,6 +17,13 @@ const healerClient = axios.create({
   timeout: 7000,
 });
 
+const orderServiceClient = axios.create({
+  baseURL:
+    process.env.ORDER_SERVICE_BASE_URL ||
+    "http://order-service.prod.svc.cluster.local:3003",
+  timeout: 5000,
+});
+
 const toAlertService = (labels = {}) =>
   labels.deployment || labels.service || labels.app || labels.job || null;
 
@@ -115,8 +122,14 @@ const getHealingHistory = async (params = {}) => {
   return response.data;
 };
 
+const getOrderServiceResilience = async () => {
+  const response = await orderServiceClient.get("/internal/resilience");
+  return response.data;
+};
+
 module.exports = {
   getServiceHealthFromPrometheus,
   getAlertsFromPrometheus,
   getHealingHistory,
+  getOrderServiceResilience,
 };
