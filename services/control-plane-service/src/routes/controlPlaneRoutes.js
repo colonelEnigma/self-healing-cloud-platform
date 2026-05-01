@@ -15,6 +15,8 @@ const {
   getServiceEventsHandler,
   postScaleAction,
   getControlPlaneActions,
+  getAiStatus,
+  postAiChat,
 } = require("../controllers/controlPlaneController");
 
 const router = express.Router();
@@ -46,5 +48,7 @@ router.get(
 );
 router.post("/actions/scale", postScaleAction);
 router.get("/actions", getControlPlaneActions);
+router.get("/ai/status", getAiStatus);
+router.post("/ai/chat", postAiChat);
 
 module.exports = router;

@@ -46,6 +46,8 @@ spec:
               value: "http://healer-service.default.svc.cluster.local:7000"
             - name: CORS_ORIGIN
               value: "http://localhost:3001"
+            - name: LM_STUDIO_MODEL
+              value: "google/gemma-3-4b"
           readinessProbe:
             httpGet:
               path: /health

@@ -25,6 +25,11 @@ const {
   HEALER_SERVICE_DOWN_POLICY,
   MANUAL_SCALE_GUARD,
 } = require("../config/resilience");
+const {
+  validateAiChatRequest,
+  chatWithLmStudio,
+  getAiAssistantStatus,
+} = require("../services/aiAssistantService");
 
 const clampInteger = (value, fallback, min, max) => {
   const parsed = Number.parseInt(value, 10);
@@ -638,6 +643,35 @@ const getControlPlaneActions = async (req, res) => {
   }
 };
 
+const getAiStatus = (req, res) => {
+  res.status(200).json(getAiAssistantStatus());
+};
+
+const postAiChat = async (req, res) => {
+  const payload = {
+    mode: req.body.mode,
+    service: req.body.service || null,
+    question: req.body.question,
+  };
+  const validation = validateAiChatRequest(payload);
+
+  if (!validation.valid) {
+    return res.status(validation.status).json(validation);
+  }
+
+  try {
+    const result = await chatWithLmStudio(payload);
+    return res.status(200).json(result);
+  } catch (err) {
+    return res.status(502).json({
+      message: "Failed to generate Control Plane AI response",
+      provider: "lm-studio",
+      model: process.env.LM_STUDIO_MODEL || "gemma3:4b",
+      error: err.message,
+    });
+  }
+};
+
 module.exports = {
   getStatus,
   getOverview,
@@ -651,4 +685,6 @@ module.exports = {
   getServiceEventsHandler,
   postScaleAction,
   getControlPlaneActions,
+  getAiStatus,
+  postAiChat,
 };

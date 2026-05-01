@@ -159,6 +159,8 @@ services:
       PROMETHEUS_BASE_URL: http://prometheus:9090
       HEALER_BASE_URL: http://healer-service:7000
       ORDER_SERVICE_BASE_URL: http://order-service:3003
+      LM_STUDIO_BASE_URL: http://host.docker.internal:1234/v1
+      LM_STUDIO_MODEL: google/gemma-3-4b
     depends_on:
       - postgres
       - user-service
