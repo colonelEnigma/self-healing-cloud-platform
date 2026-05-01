@@ -16,6 +16,9 @@ const LM_STUDIO_MODEL = process.env.LM_STUDIO_MODEL || "gemma3:4b";
 const LM_STUDIO_TIMEOUT_MS =
   Number.parseInt(process.env.LM_STUDIO_TIMEOUT_MS, 10) || 30000;
 
+const CONTROL_PLANE_CONTEXT_BASE_URL =
+  process.env.CONTROL_PLANE_CONTEXT_BASE_URL || "";
+
 const AI_CONTEXT_LIMITS = Object.freeze({
   overviewRecentItems: 5,
   auditLimit: 8,
@@ -31,5 +34,6 @@ module.exports = {
   LM_STUDIO_BASE_URL,
   LM_STUDIO_MODEL,
   LM_STUDIO_TIMEOUT_MS,
+  CONTROL_PLANE_CONTEXT_BASE_URL,
   AI_CONTEXT_LIMITS,
 };

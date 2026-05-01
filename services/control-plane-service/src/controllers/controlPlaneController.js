@@ -660,7 +660,10 @@ const postAiChat = async (req, res) => {
   }
 
   try {
-    const result = await chatWithLmStudio(payload);
+    const result = await chatWithLmStudio({
+      ...payload,
+      authHeader: req.headers.authorization,
+    });
     return res.status(200).json(result);
   } catch (err) {
     return res.status(502).json({

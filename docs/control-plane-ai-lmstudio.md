@@ -26,6 +26,22 @@ For docker-compose local backend testing, the service is configured to call:
 http://host.docker.internal:1234/v1
 ```
 
+For local AI demos, the service can call the live prod Control Plane through
+the frontend/dev ingress tunnel:
+
+```text
+CONTROL_PLANE_CONTEXT_BASE_URL=http://host.docker.internal:18080/api/control-plane
+```
+
+This keeps LM Studio local while keeping AI context sourced from prod Control
+Plane APIs.
+
+For slower local models, set a longer timeout:
+
+```text
+LM_STUDIO_TIMEOUT_MS=120000
+```
+
 ## API Request
 
 ```http

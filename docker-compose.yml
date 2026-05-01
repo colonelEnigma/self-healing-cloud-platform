@@ -161,6 +161,8 @@ services:
       ORDER_SERVICE_BASE_URL: http://order-service:3003
       LM_STUDIO_BASE_URL: http://host.docker.internal:1234/v1
       LM_STUDIO_MODEL: google/gemma-3-4b
+      LM_STUDIO_TIMEOUT_MS: 120000
+      CONTROL_PLANE_CONTEXT_BASE_URL: http://host.docker.internal:18080/api/control-plane
     depends_on:
       - postgres
       - user-service
