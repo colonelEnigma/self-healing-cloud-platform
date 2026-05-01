@@ -128,6 +128,7 @@ spec:
 
             env.PROMOTION_ACTION_VALUE   = promotionCfg['ACTION'] ?: ''
             env.PROMOTE_NAMESPACE        = promotionCfg['PROMOTE_NAMESPACE'] ?: ''
+            env.PROMOTE_SERVICES         = promotionCfg['PROMOTE_SERVICES'] ?: ''
             env.CONFIRM_PROMOTION_VALUE  = promotionCfg['CONFIRM_PROMOTION'] ?: ''
 
             if (
@@ -139,60 +140,21 @@ spec:
                 error "Promotion target must be prod; got '${env.PROMOTE_NAMESPACE}'."
               }
 
-              def changedPromotionServices = []
-
-              def serviceChangeRules = [
-                'user-service': { files ->
-                  files.any {
-                    it.startsWith('services/user-service/') ||
-                    it.startsWith('k8s/user-service/') ||
-                    it == 'jenkins/user-service.groovy'
+              if (env.PROMOTE_SERVICES?.trim()) {
+                def requestedServices = env.PROMOTE_SERVICES.split(/\s*,\s*/).collect { it.trim() }.findAll { it }
+                requestedServices.each { service ->
+                  if (service.contains(':')) {
+                    error "PROMOTE_SERVICES now accepts service names only, not tags. Invalid entry: '${service}'"
                   }
-                },
-                'order-service': { files ->
-                  files.any {
-                    it.startsWith('services/order-service/') ||
-                    it.startsWith('k8s/order-service/') ||
-                    it == 'jenkins/order-service.groovy'
-                  }
-                },
-                'payment-service': { files ->
-                  files.any {
-                    it.startsWith('services/payment-service/') ||
-                    it.startsWith('k8s/payment-service/') ||
-                    it == 'jenkins/payment-service.groovy'
-                  }
-                },
-                'product-service': { files ->
-                  files.any {
-                    it.startsWith('services/product-service/') ||
-                    it.startsWith('k8s/product-service/') ||
-                    it == 'jenkins/product-service.groovy'
-                  }
-                },
-                'search-service': { files ->
-                  files.any {
-                    it.startsWith('services/search-service/') ||
-                    it.startsWith('k8s/search-service/') ||
-                    it == 'jenkins/search-service.groovy'
+                  if (!allowedPromotionServices.contains(service)) {
+                    error "Unsupported promotion service in PROMOTE_SERVICES: '${service}'"
                   }
                 }
-              ]
-
-              allowedPromotionServices.each { service ->
-                if (serviceChangeRules[service](changedFiles)) {
-                  changedPromotionServices << service
-                }
+                env.PROMOTE_SERVICES = requestedServices.join(',')
               }
 
-              if (changedPromotionServices && !changedPromotionServices.isEmpty()) {
-                env.PROMOTION_PLAN = changedPromotionServices.collect { service -> "${service}:${env.CURRENT_SHORT_COMMIT}" }.join(',')
-                env.PROMOTE_SERVICES = changedPromotionServices.join(',')
-                env.PROMOTION_MODE = 'changed-services-current-sha'
-                env.IS_PROMOTION = 'true'
-              } else {
-                error 'Promotion was confirmed, but no supported app service changes were detected in this commit.'
-              }
+              env.PROMOTION_MODE = 'promote-test-images-to-prod'
+              env.IS_PROMOTION = 'true'
             }
           }
 
@@ -328,28 +290,12 @@ apiVersion: v1
 kind: Pod
 spec:
   serviceAccountName: jenkins-deployer
-  volumes:
-    - name: shared-auth
-      emptyDir: {}
   containers:
     - name: devops
       image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/jenkins-agent-devops:latest
       command:
         - cat
       tty: true
-      volumeMounts:
-        - name: shared-auth
-          mountPath: /shared-auth
-    - name: buildah
-      image: quay.io/buildah/stable:latest
-      command:
-        - cat
-      tty: true
-      securityContext:
-        privileged: true
-      volumeMounts:
-        - name: shared-auth
-          mountPath: /shared-auth
 '''
         }
       }
@@ -358,16 +304,57 @@ spec:
           checkout scm
           script {
             def common = load 'jenkins/common.groovy'
-            if (!env.PROMOTION_PLAN?.trim()) {
-              error 'PROMOTION_PLAN is empty. Confirm promotion with service changes in the same commit.'
+            def allowedPromotionServices = [
+              'user-service',
+              'order-service',
+              'payment-service',
+              'product-service',
+              'search-service'
+            ]
+            def requestedServices = env.PROMOTE_SERVICES?.trim()
+              ? env.PROMOTE_SERVICES.split(/\s*,\s*/).collect { it.trim() }.findAll { it }
+              : allowedPromotionServices
+            def explicitServiceSelection = env.PROMOTE_SERVICES?.trim() ? true : false
+            def promotionItems = []
+
+            requestedServices.each { serviceName ->
+              def testImage = sh(
+                script: """kubectl get deployment/${serviceName} -n test -o jsonpath='{.spec.template.spec.containers[?(@.name=="${serviceName}")].image}' 2>/dev/null || true""",
+                returnStdout: true
+              ).trim()
+              def prodImage = sh(
+                script: """kubectl get deployment/${serviceName} -n prod -o jsonpath='{.spec.template.spec.containers[?(@.name=="${serviceName}")].image}' 2>/dev/null || true""",
+                returnStdout: true
+              ).trim()
+
+              if (!testImage) {
+                error "Cannot promote ${serviceName}: deployment image not found in test."
+              }
+
+              if (testImage == prodImage && !explicitServiceSelection) {
+                echo "Skipping ${serviceName}; prod already matches test image ${testImage}."
+              } else {
+                def tagSeparator = testImage.lastIndexOf(':')
+                if (tagSeparator < 0 || tagSeparator == testImage.length() - 1) {
+                  error "Cannot parse image tag for ${serviceName} from test image '${testImage}'."
+                }
+
+                def imageTag = testImage.substring(tagSeparator + 1)
+                promotionItems << "${serviceName}:${imageTag}"
+              }
             }
 
-            def promotionItems = env.PROMOTION_PLAN.split(',').collect { it.trim() }.findAll { it }
+            if (!promotionItems) {
+              error 'Promotion was confirmed, but no test image differs from prod. Nothing to promote.'
+            }
+
+            env.PROMOTION_PLAN = promotionItems.join(',')
+            echo "PROMOTION_PLAN=${env.PROMOTION_PLAN}"
+
             promotionItems.each { item ->
               def parts = item.split(':', 2)
               def serviceName = parts[0].trim()
               def imageTag = parts[1].trim()
-              common.runNamedServiceToTargetsInCurrentNode(this, serviceName, ['dev', 'test'])
               common.promoteService(this, serviceName, env.PROMOTE_NAMESPACE, imageTag)
             }
           }
