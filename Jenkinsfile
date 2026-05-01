@@ -328,12 +328,28 @@ apiVersion: v1
 kind: Pod
 spec:
   serviceAccountName: jenkins-deployer
+  volumes:
+    - name: shared-auth
+      emptyDir: {}
   containers:
     - name: devops
       image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/jenkins-agent-devops:latest
       command:
         - cat
       tty: true
+      volumeMounts:
+        - name: shared-auth
+          mountPath: /shared-auth
+    - name: buildah
+      image: quay.io/buildah/stable:latest
+      command:
+        - cat
+      tty: true
+      securityContext:
+        privileged: true
+      volumeMounts:
+        - name: shared-auth
+          mountPath: /shared-auth
 '''
         }
       }
@@ -351,7 +367,7 @@ spec:
               def parts = item.split(':', 2)
               def serviceName = parts[0].trim()
               def imageTag = parts[1].trim()
-              common.runNamedServiceToTargets(this, serviceName, ['dev', 'test'])
+              common.runNamedServiceToTargetsInCurrentNode(this, serviceName, ['dev', 'test'])
               common.promoteService(this, serviceName, env.PROMOTE_NAMESPACE, imageTag)
             }
           }
@@ -429,45 +445,60 @@ apiVersion: v1
 kind: Pod
 spec:
   serviceAccountName: jenkins-deployer
+  volumes:
+    - name: shared-auth
+      emptyDir: {}
   containers:
     - name: devops
       image: 348071628290.dkr.ecr.ap-south-1.amazonaws.com/jenkins-agent-devops:latest
       command:
         - cat
       tty: true
+      volumeMounts:
+        - name: shared-auth
+          mountPath: /shared-auth
+    - name: buildah
+      image: quay.io/buildah/stable:latest
+      command:
+        - cat
+      tty: true
+      securityContext:
+        privileged: true
+      volumeMounts:
+        - name: shared-auth
+          mountPath: /shared-auth
 '''
         }
       }
       steps {
+        container('devops') {
+          checkout scm
+        }
         script {
+          def common = load 'jenkins/common.groovy'
+
           if (env.RUN_USER == 'true') {
-            def svc = load 'jenkins/user-service.groovy'
-            svc.run(this)
+            common.runNamedServiceInCurrentNode(this, 'user-service')
           }
 
           if (env.RUN_ORDER == 'true') {
-            def svc = load 'jenkins/order-service.groovy'
-            svc.run(this)
+            common.runNamedServiceInCurrentNode(this, 'order-service')
           }
 
           if (env.RUN_PRODUCT == 'true') {
-            def svc = load 'jenkins/product-service.groovy'
-            svc.run(this)
+            common.runNamedServiceInCurrentNode(this, 'product-service')
           }
 
           if (env.RUN_PAYMENT == 'true') {
-            def svc = load 'jenkins/payment-service.groovy'
-            svc.run(this)
+            common.runNamedServiceInCurrentNode(this, 'payment-service')
           }
 
           if (env.RUN_SEARCH == 'true') {
-            def svc = load 'jenkins/search-service.groovy'
-            svc.run(this)
+            common.runNamedServiceInCurrentNode(this, 'search-service')
           }
 
           if (env.RUN_CONTROL_PLANE == 'true') {
-            def svc = load 'jenkins/control-plane-service.groovy'
-            svc.run(this)
+            common.runNamedServiceInCurrentNode(this, 'control-plane-service')
           }
 
           if (

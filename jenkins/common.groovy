@@ -125,57 +125,69 @@ def runNamedServiceToTargets(scriptRef, String serviceName, List deployTargets) 
   runService(scriptRef, cfg)
 }
 
+def runNamedServiceInCurrentNode(scriptRef, String serviceName) {
+  runServiceInCurrentNode(scriptRef, configForService(serviceName))
+}
+
+def runNamedServiceToTargetsInCurrentNode(scriptRef, String serviceName, List deployTargets) {
+  def cfg = configForService(serviceName) + [deployTargets: deployTargets]
+  runServiceInCurrentNode(scriptRef, cfg)
+}
+
 def runService(scriptRef, Map cfg) {
-  scriptRef.podTemplate(yaml: podYaml(), defaultContainer: 'devops') {
+  scriptRef.podTemplate(yaml: podYaml()) {
     scriptRef.node(scriptRef.POD_LABEL) {
+      runServiceInCurrentNode(scriptRef, cfg)
+    }
+  }
+}
 
-      scriptRef.stage("${cfg.serviceName} - Prepare Git") {
-        scriptRef.container('devops') {
-          scriptRef.sh 'git config --global --add safe.directory "*"'
-          scriptRef.checkout scriptRef.scm
-          scriptRef.script {
-            scriptRef.env.IMAGE_TAG = scriptRef.sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
-          }
-        }
+def runServiceInCurrentNode(scriptRef, Map cfg) {
+  scriptRef.stage("${cfg.serviceName} - Prepare Git") {
+    scriptRef.container('devops') {
+      scriptRef.sh 'git config --global --add safe.directory "*"'
+      scriptRef.checkout scriptRef.scm
+      scriptRef.script {
+        scriptRef.env.IMAGE_TAG = scriptRef.sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
       }
+    }
+  }
 
-      scriptRef.stage("${cfg.serviceName} - Login to ECR") {
-        scriptRef.container('devops') {
-          scriptRef.withCredentials([
-            scriptRef.string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
-            scriptRef.string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
-          ]) {
-            scriptRef.sh """
-              mkdir -p /shared-auth
-              aws ecr get-login-password --region ${cfg.awsRegion} > /shared-auth/ecr-password
-            """
-          }
-        }
+  scriptRef.stage("${cfg.serviceName} - Login to ECR") {
+    scriptRef.container('devops') {
+      scriptRef.withCredentials([
+        scriptRef.string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
+        scriptRef.string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
+      ]) {
+        scriptRef.sh """
+          mkdir -p /shared-auth
+          aws ecr get-login-password --region ${cfg.awsRegion} > /shared-auth/ecr-password
+        """
       }
+    }
+  }
 
-      scriptRef.stage("${cfg.serviceName} - Build and Push") {
-        scriptRef.container('buildah') {
-          scriptRef.sh """
-            export REGISTRY_AUTH_FILE=/tmp/auth.json
-            cat /shared-auth/ecr-password | buildah login --username AWS --password-stdin ${cfg.ecrRegistry}
+  scriptRef.stage("${cfg.serviceName} - Build and Push") {
+    scriptRef.container('buildah') {
+      scriptRef.sh """
+        export REGISTRY_AUTH_FILE=/tmp/auth.json
+        cat /shared-auth/ecr-password | buildah login --username AWS --password-stdin ${cfg.ecrRegistry}
 
-            buildah bud \
-              -t ${cfg.ecrRegistry}/${cfg.ecrRepository}:${scriptRef.env.IMAGE_TAG} \
-              ${cfg.servicePath}
+        buildah bud \
+          -t ${cfg.ecrRegistry}/${cfg.ecrRepository}:${scriptRef.env.IMAGE_TAG} \
+          ${cfg.servicePath}
 
-            buildah push \
-              ${cfg.ecrRegistry}/${cfg.ecrRepository}:${scriptRef.env.IMAGE_TAG}
-          """
-        }
-      }
+        buildah push \
+          ${cfg.ecrRegistry}/${cfg.ecrRepository}:${scriptRef.env.IMAGE_TAG}
+      """
+    }
+  }
 
-      def deployTargets = cfg.deployTargets ?: ['dev', 'test']
-      deployTargets.each { targetEnv ->
-        scriptRef.stage("${cfg.serviceName} - Deploy to ${targetEnv}") {
-          scriptRef.container('devops') {
-            deployEnv(scriptRef, cfg, targetEnv, scriptRef.env.IMAGE_TAG)
-          }
-        }
+  def deployTargets = cfg.deployTargets ?: ['dev', 'test']
+  deployTargets.each { targetEnv ->
+    scriptRef.stage("${cfg.serviceName} - Deploy to ${targetEnv}") {
+      scriptRef.container('devops') {
+        deployEnv(scriptRef, cfg, targetEnv, scriptRef.env.IMAGE_TAG)
       }
     }
   }
