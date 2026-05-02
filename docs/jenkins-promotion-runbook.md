@@ -5,7 +5,7 @@ tags:
   - ci-cd
   - promotion
   - runbook
-updated: 2026-05-01
+updated: 2026-05-02
 related:
   - rollback-runbook
 ---
@@ -212,6 +212,20 @@ Consumer group mapping:
 | `product-service` | `product-group-dev` | `product-group-test` | `product-group` |
 
 Kafka topic and group names must continue to come from environment variables in service code.
+
+## Manifest-Only Service Fixes
+
+If a service manifest changes, Jenkins treats that service as changed and deploys it to `dev` and `test`. For example, a `k8s/payment-service/deployment.yaml` JWT configuration fix should flow as:
+
+```text
+push payment-service manifest fix
+-> Jenkins deploys payment-service to dev and test
+-> verify test
+-> promote with PROMOTE_SERVICES=payment-service
+-> Jenkins reads the test image tag and applies that image plus rendered manifest to prod
+```
+
+`PROMOTE_SERVICES` still uses service names only. Do not add image tags to this value.
 
 ## Verification
 
