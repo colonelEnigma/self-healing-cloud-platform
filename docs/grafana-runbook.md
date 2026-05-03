@@ -9,7 +9,7 @@ Current scope:
 - `dev`
 - `prod`
 
-`test` is intentionally excluded from Grafana dashboard alignment unless explicitly requested.
+The `test` environment has been decommissioned; Grafana dashboard alignment is scoped to `dev` and `prod`.
 
 ## Current Provisioning Model
 
@@ -215,7 +215,7 @@ Expected:
 
 - Query status is `success`.
 - `dev` and `prod` service targets are present.
-- `test` targets are not required and should remain excluded.
+- `test` targets should not exist after decommission.
 
 Check PostgreSQL network reachability from Grafana:
 

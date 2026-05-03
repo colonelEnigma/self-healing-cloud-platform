@@ -22,7 +22,7 @@ The platform runs five independent microservices communicating through REST APIs
 - **Event-driven architecture** — order events flow through Kafka to payment and search consumers asynchronously
 - **Full observability** — Prometheus metrics, Grafana dashboards, Alertmanager rules, Slack notifications
 - **Reliability patterns** — Kafka retry logic and dead letter queue (DLQ) ensure failures are never silently dropped
-- **Environment isolation** — `dev` / `test` / `prod` namespaces with separate topic and DB naming
+- **Environment isolation** — `dev` / `prod` namespaces with separate topic and DB naming
 - **Immutable deployments** — Git-SHA image tagging for full traceability and rollback support
 - **Structured runbooks** — documented release, promotion, rollback, and debugging playbooks
 
@@ -108,7 +108,7 @@ Grafana    ──► Prometheus
 | 2 | Observability — Prometheus + Grafana | ✅ Done |
 | 3 | Alerting — Alertmanager + Slack | ✅ Done |
 | 4 | Versioning — Git-SHA tags, immutable images | 🔜 Current |
-| 5 | Environments — dev / test / prod isolation | 🔜 Next |
+| 5 | Environments — dev / prod isolation | 🔜 Next |
 | 6 | CI/CD — Jenkins build once, promote through envs | 🔜 Upcoming |
 | 7 | Rollback — redeploy previous SHA | 🔜 Upcoming |
 | 8 | Access Layer — custom domain, HTTPS, Ingress | 🔜 Upcoming |
@@ -188,7 +188,7 @@ kubectl logs deployment/payment-service -n dev --tail=50
 The platform follows a **build once, promote everywhere** model:
 
 ```
-git push → Jenkins → build image → deploy to dev → promote to test → promote to prod
+git push → Jenkins → build image → deploy to dev → promote to prod
 ```
 
 To rollback:

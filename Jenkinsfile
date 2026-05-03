@@ -153,7 +153,7 @@ spec:
                 env.PROMOTE_SERVICES = requestedServices.join(',')
               }
 
-              env.PROMOTION_MODE = 'promote-test-images-to-prod'
+              env.PROMOTION_MODE = 'promote-dev-images-to-prod'
               env.IS_PROMOTION = 'true'
             }
           }
@@ -318,8 +318,8 @@ spec:
             def promotionItems = []
 
             requestedServices.each { serviceName ->
-              def testImage = sh(
-                script: """kubectl get deployment/${serviceName} -n test -o jsonpath='{.spec.template.spec.containers[?(@.name=="${serviceName}")].image}' 2>/dev/null || true""",
+              def devImage = sh(
+                script: """kubectl get deployment/${serviceName} -n dev -o jsonpath='{.spec.template.spec.containers[?(@.name=="${serviceName}")].image}' 2>/dev/null || true""",
                 returnStdout: true
               ).trim()
               def prodImage = sh(
@@ -327,25 +327,25 @@ spec:
                 returnStdout: true
               ).trim()
 
-              if (!testImage) {
-                error "Cannot promote ${serviceName}: deployment image not found in test."
+              if (!devImage) {
+                error "Cannot promote ${serviceName}: deployment image not found in dev."
               }
 
-              if (testImage == prodImage && !explicitServiceSelection) {
-                echo "Skipping ${serviceName}; prod already matches test image ${testImage}."
+              if (devImage == prodImage && !explicitServiceSelection) {
+                echo "Skipping ${serviceName}; prod already matches dev image ${devImage}."
               } else {
-                def tagSeparator = testImage.lastIndexOf(':')
-                if (tagSeparator < 0 || tagSeparator == testImage.length() - 1) {
-                  error "Cannot parse image tag for ${serviceName} from test image '${testImage}'."
+                def tagSeparator = devImage.lastIndexOf(':')
+                if (tagSeparator < 0 || tagSeparator == devImage.length() - 1) {
+                  error "Cannot parse image tag for ${serviceName} from dev image '${devImage}'."
                 }
 
-                def imageTag = testImage.substring(tagSeparator + 1)
+                def imageTag = devImage.substring(tagSeparator + 1)
                 promotionItems << "${serviceName}:${imageTag}"
               }
             }
 
             if (!promotionItems) {
-              error 'Promotion was confirmed, but no test image differs from prod. Nothing to promote.'
+              error 'Promotion was confirmed, but no dev image differs from prod. Nothing to promote.'
             }
 
             env.PROMOTION_PLAN = promotionItems.join(',')
@@ -392,7 +392,7 @@ spec:
             'product-service',
             'search-service'
           ]
-          def allowedRollbackNamespaces = ['dev', 'test', 'prod']
+          def allowedRollbackNamespaces = ['dev', 'prod']
 
           if (!allowedRollbackServices.contains(env.ROLLBACK_SERVICE)) {
             error "Unsupported rollback service: ${env.ROLLBACK_SERVICE}"

@@ -9,7 +9,7 @@ Current allowed environments:
 - `dev`
 - `prod`
 
-`test` is intentionally excluded from healer automation.
+The `test` environment has been decommissioned. Healer automation is scoped to `dev` and `prod`.
 
 Current allowed deployments:
 

@@ -1,11 +1,11 @@
----
+﻿---
 title: Rollback Runbook
 tags:
   - jenkins
   - rollback
   - incident-response
   - runbook
-updated: 2026-04-29
+updated: 2026-05-03
 related:
   - jenkins-promotion-runbook
 ---
@@ -20,7 +20,7 @@ related:
 | Item | Value |
 |---|---|
 | Rollback file | `jenkins/rollback.env` |
-| Supported namespaces | `dev`, `test`, `prod` |
+| Supported namespaces | `dev`, `prod` |
 | Supported services | `user-service`, `order-service`, `payment-service`, `product-service`, `search-service` |
 | Rollback command | `kubectl set image` |
 | Jenkins trigger | automatic every 2 minutes |
@@ -74,7 +74,7 @@ Required values:
 
 - `ACTION=rollback`
 - `ROLLBACK_SERVICE` is one of the supported app services.
-- `ROLLBACK_NAMESPACE` is `dev`, `test`, or `prod`.
+- `ROLLBACK_NAMESPACE` is `dev` or `prod`.
 - `ROLLBACK_IMAGE_TAG` is an existing ECR image tag.
 - `CONFIRM_ROLLBACK=true`
 
@@ -235,7 +235,7 @@ If Jenkins does not enter rollback mode:
 If rollback fails validation:
 
 - Confirm `ROLLBACK_SERVICE` is one of the supported services.
-- Confirm `ROLLBACK_NAMESPACE` is `dev`, `test`, or `prod`.
+- Confirm `ROLLBACK_NAMESPACE` is `dev` or `prod`.
 - Confirm the image tag contains only normal tag characters.
 - Confirm the image tag exists in ECR.
 

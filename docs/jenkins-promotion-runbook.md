@@ -1,11 +1,11 @@
----
+﻿---
 title: Jenkins Promotion Runbook
 tags:
   - jenkins
   - ci-cd
   - promotion
   - runbook
-updated: 2026-05-02
+updated: 2026-05-03
 related:
   - rollback-runbook
 ---
@@ -13,7 +13,7 @@ related:
 # Jenkins Promotion Runbook
 
 > [!summary] Current model
-> Normal service commits build one short-SHA image and automatically deploy it to `dev` and `test`. A later confirmed promotion commit promotes the immutable image already running in `test` to `prod`.
+> Normal service commits build one short-SHA image and automatically deploy it to `dev`. A later confirmed promotion commit promotes the immutable image already running in `dev` to `prod`.
 
 ## Quick Facts
 
@@ -21,7 +21,7 @@ related:
 |---|---|
 | Promotion file | `jenkins/promotion.env` |
 | Promotion target | `prod` only |
-| Auto-deploy targets | `dev`, `test` |
+| Auto-deploy targets | `dev` |
 | Image tag | short Git SHA |
 | Jenkins trigger | automatic every 2 minutes |
 | Related rollback doc | [Rollback Runbook](rollback-runbook.md) |
@@ -38,12 +38,11 @@ service change commit
 -> Jenkins tags each image with the current short Git SHA
 -> Jenkins pushes images to ECR
 -> Jenkins deploys changed services to dev
--> Jenkins deploys changed services to test
 
 promotion.env commit
--> Jenkins reads images currently running in test
--> Jenkins compares test images against prod images
--> Jenkins promotes selected test image tags to prod
+-> Jenkins reads images currently running in dev
+-> Jenkins compares dev images against prod images
+-> Jenkins promotes selected dev image tags to prod
 ```
 
 Image format:
@@ -81,7 +80,7 @@ Required values:
 - `CONFIRM_PROMOTION=true`
 - `PROMOTE_SERVICES` is optional.
 
-If `PROMOTE_SERVICES` is blank, Jenkins promotes every supported app service where the `test` image differs from the `prod` image.
+If `PROMOTE_SERVICES` is blank, Jenkins promotes every supported app service where the `dev` image differs from the `prod` image.
 
 If `PROMOTE_SERVICES` is set, it must be a comma-separated list of service names only, with no image tags:
 
@@ -99,9 +98,9 @@ Supported app service paths:
 
 ## Procedure
 
-1. Push the app service changes normally and let Jenkins deploy them to `dev` and `test`.
+1. Push the app service changes normally and let Jenkins deploy them to `dev`.
 
-2. Verify the service in `test`.
+2. Verify the service in `dev`.
 
 3. Confirm prod promotion in `jenkins/promotion.env`.
 
@@ -120,7 +119,7 @@ git commit -m "Promote order-service to prod"
 git push
 ```
 
-5. Jenkins reads the image tag from `test/order-service` and deploys that same tag to `prod/order-service`.
+5. Jenkins reads the image tag from `dev/order-service` and deploys that same tag to `prod/order-service`.
 
 6. Verify `prod`.
 
@@ -135,7 +134,7 @@ CONFIRM_PROMOTION=false
 
 ## Example
 
-Scenario: `order-service` and `payment-service` were already built and verified in `test`.
+Scenario: `order-service` and `payment-service` were already built and verified in `dev`.
 
 ```bash
 git add jenkins/promotion.env
@@ -148,10 +147,10 @@ Expected Jenkins behavior:
 ```text
 Detect Changed Services
 -> IS_PROMOTION=true
--> PROMOTION_MODE=promote-test-images-to-prod
--> read test/order-service image tag
--> read test/payment-service image tag
--> PROMOTION_PLAN=order-service:<test-tag>,payment-service:<test-tag>
+-> PROMOTION_MODE=promote-dev-images-to-prod
+-> read dev/order-service image tag
+-> read dev/payment-service image tag
+-> PROMOTION_PLAN=order-service:<dev-tag>,payment-service:<dev-tag>
 -> promote order-service:def5678 to prod
 -> promote payment-service:def5678 to prod
 -> wait for rollout status
@@ -171,7 +170,7 @@ Promotion mode starts when the diff includes `jenkins/promotion.env` and the fil
 
 Only one confirmed action is allowed per commit. Do not confirm promotion and rollback in the same commit.
 
-Promotion is idempotent: if `prod` already runs the same image as `test`, Jenkins verifies rollout status and exits without reapplying manifests for explicitly selected services. With blank `PROMOTE_SERVICES`, Jenkins skips services where `test` and `prod` already match.
+Promotion is idempotent: if `prod` already runs the same image as `dev`, Jenkins verifies rollout status and exits without reapplying manifests for explicitly selected services. With blank `PROMOTE_SERVICES`, Jenkins skips services where `dev` and `prod` already match.
 
 ## Manifest Rendering
 
@@ -200,29 +199,28 @@ Topic mapping:
 | Environment | Main topic | DLQ topic |
 |---|---|---|
 | `dev` | `order_created_dev` | `order_created_dlq_dev` |
-| `test` | `order_created_test` | `order_created_dlq_test` |
 | `prod` | `order_created` | `order_created_dlq` |
 
 Consumer group mapping:
 
-| Service | Dev | Test | Prod |
-|---|---|---|---|
-| `payment-service` | `payment-group-dev` | `payment-group-test` | `payment-group` |
-| `search-service` | `search-group-dev` | `search-group-test` | `search-group` |
-| `product-service` | `product-group-dev` | `product-group-test` | `product-group` |
+| Service | Dev | Prod |
+|---|---|---|
+| `payment-service` | `payment-group-dev` | `payment-group` |
+| `search-service` | `search-group-dev` | `search-group` |
+| `product-service` | `product-group-dev` | `product-group` |
 
 Kafka topic and group names must continue to come from environment variables in service code.
 
 ## Manifest-Only Service Fixes
 
-If a service manifest changes, Jenkins treats that service as changed and deploys it to `dev` and `test`. For example, a `k8s/payment-service/deployment.yaml` JWT configuration fix should flow as:
+If a service manifest changes, Jenkins treats that service as changed and deploys it to `dev`. For example, a `k8s/payment-service/deployment.yaml` JWT configuration fix should flow as:
 
 ```text
 push payment-service manifest fix
--> Jenkins deploys payment-service to dev and test
--> verify test
+-> Jenkins deploys payment-service to dev
+-> verify dev
 -> promote with PROMOTE_SERVICES=payment-service
--> Jenkins reads the test image tag and applies that image plus rendered manifest to prod
+-> Jenkins reads the dev image tag and applies that image plus rendered manifest to prod
 ```
 
 `PROMOTE_SERVICES` still uses service names only. Do not add image tags to this value.
@@ -275,8 +273,8 @@ If promotion fails validation:
 
 - Confirm `PROMOTE_NAMESPACE=prod`.
 - Confirm `PROMOTE_SERVICES`, if set, contains service names only and no tags.
-- Confirm the selected service has a deployment in `test`.
-- Confirm the `test` deployment image has a normal tag.
+- Confirm the selected service has a deployment in `dev`.
+- Confirm the `dev` deployment image has a normal tag.
 
 If rollout fails:
 

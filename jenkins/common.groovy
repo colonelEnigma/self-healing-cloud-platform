@@ -183,7 +183,7 @@ def runServiceInCurrentNode(scriptRef, Map cfg) {
     }
   }
 
-  def deployTargets = cfg.deployTargets ?: ['dev', 'test']
+  def deployTargets = cfg.deployTargets ?: ['dev']
   deployTargets.each { targetEnv ->
     scriptRef.stage("${cfg.serviceName} - Deploy to ${targetEnv}") {
       scriptRef.container('devops') {
@@ -203,7 +203,7 @@ def promoteService(scriptRef, String serviceName, String targetEnv, String image
   }
 
   if (!allowedEnvs.contains(targetEnv)) {
-    scriptRef.error("Promotion target must be prod; got '${targetEnv}'. Dev and test deploy automatically from normal service changes.")
+    scriptRef.error("Promotion target must be prod; got '${targetEnv}'. Dev deploys automatically from normal service changes.")
   }
 
   if (!(imageTag ==~ /^[A-Za-z0-9_.-]+$/)) {
@@ -232,7 +232,7 @@ def promoteService(scriptRef, String serviceName, String targetEnv, String image
 }
 
 def deployEnv(scriptRef, Map cfg, String targetEnv, String imageTag) {
-  def allowedEnvs = ['dev', 'test', 'prod', 'monitoring']
+  def allowedEnvs = ['dev', 'prod', 'monitoring']
   if (!allowedEnvs.contains(targetEnv)) {
     scriptRef.error("Deployment target must be one of ${allowedEnvs}; got '${targetEnv}'.")
   }
@@ -258,17 +258,6 @@ def deployEnv(scriptRef, Map cfg, String targetEnv, String imageTag) {
         group = 'search-group-dev'
       } else if (cfg.serviceName == 'product-service') {
         group = 'product-group-dev'
-      }
-    } else if (targetEnv == 'test') {
-      topic = 'order_created_test'
-      dlq   = 'order_created_dlq_test'
-
-      if (cfg.serviceName == 'payment-service') {
-        group = 'payment-group-test'
-      } else if (cfg.serviceName == 'search-service') {
-        group = 'search-group-test'
-      } else if (cfg.serviceName == 'product-service') {
-        group = 'product-group-test'
       }
     } else {
       topic = 'order_created'
