@@ -1,4 +1,4 @@
-# 🧠 Self-Healing Cloud Platform
+﻿# ðŸ§  Self-Healing Cloud Platform
 
 > Production-grade Kubernetes platform with event-driven microservices, full observability, and a roadmap toward automated self-healing.
 
@@ -9,58 +9,58 @@
 
 ---
 
-## 📖 Overview
+## ðŸ“– Overview
 
 A production-grade, cloud-native platform built to demonstrate how modern distributed systems can **monitor themselves**, **detect failures automatically**, and eventually **recover without manual intervention**.
 
-The platform runs five independent microservices communicating through REST APIs and Kafka events, deployed on AWS EKS with a full observability stack. When something breaks, the system detects it in seconds and fires an alert — and is actively being built to fix itself.
+The platform runs five independent microservices communicating through REST APIs and Kafka events, deployed on AWS EKS with a full observability stack. When something breaks, the system detects it in seconds and fires an alert â€” and is actively being built to fix itself.
 
 ---
 
-## ✨ Features
+## âœ¨ Features
 
-- **Event-driven architecture** — order events flow through Kafka to payment and search consumers asynchronously
-- **Full observability** — Prometheus metrics, Grafana dashboards, Alertmanager rules, Slack notifications
-- **Reliability patterns** — Kafka retry logic and dead letter queue (DLQ) ensure failures are never silently dropped
-- **Environment isolation** — `dev` / `prod` namespaces with separate topic and DB naming
-- **Immutable deployments** — Git-SHA image tagging for full traceability and rollback support
-- **Structured runbooks** — documented release, promotion, rollback, and debugging playbooks
+- **Event-driven architecture** â€” order events flow through Kafka to payment and search consumers asynchronously
+- **Full observability** â€” Prometheus metrics, Grafana dashboards, Alertmanager rules, Slack notifications
+- **Reliability patterns** â€” Kafka retry logic and dead letter queue (DLQ) ensure failures are never silently dropped
+- **Environment isolation** â€” `dev` / `prod` namespaces with separate topic and DB naming
+- **Immutable deployments** â€” Git-SHA image tagging for full traceability and rollback support
+- **Structured runbooks** â€” documented release, promotion, rollback, and debugging playbooks
 
 ---
 
-## 🏗️ Architecture
+## ðŸ—ï¸ Architecture
 
 ```
 User / Client
-     │
-     ▼
+     â”‚
+     â–¼
 Ingress / API
-     │
-     ├──► user-service      ──► userdb
-     ├──► order-service     ──► orderdb ──► Kafka
-     └──► product-service   ──► productdb
-                                   │
-                          ┌────────┴────────┐
-                          ▼                 ▼
+     â”‚
+     â”œâ”€â”€â–º user-service      â”€â”€â–º userdb
+     â”œâ”€â”€â–º order-service     â”€â”€â–º orderdb â”€â”€â–º Kafka
+     â””â”€â”€â–º product-service   â”€â”€â–º productdb
+                                   â”‚
+                          â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”
+                          â–¼                 â–¼
                    payment-service    search-service
-                       │                   │
+                       â”‚                   â”‚
                     paymentdb          searchdb + Redis
 
-Prometheus ──► all services ──► Alertmanager ──► Slack
-Grafana    ──► Prometheus
+Prometheus â”€â”€â–º all services â”€â”€â–º Alertmanager â”€â”€â–º Slack
+Grafana    â”€â”€â–º Prometheus
 ```
 
 ### Order Lifecycle
 
 1. User calls `POST /api/orders`
 2. `order-service` validates, saves to `orderdb`, publishes `ORDER_CREATED` to Kafka
-3. `payment-service` consumes → processes payment → writes to `paymentdb`
-4. `search-service` consumes → updates search index → updates Redis cache
-5. On failure → retry → DLQ → alert fires → *(healer-service, coming soon)*
+3. `payment-service` consumes â†’ processes payment â†’ writes to `paymentdb`
+4. `search-service` consumes â†’ updates search index â†’ updates Redis cache
+5. On failure â†’ retry â†’ DLQ â†’ alert fires â†’ *(healer-service, coming soon)*
 
 ---
 
-## 🧩 Microservices
+## ðŸ§© Microservices
 
 | Service | Port | Responsibility | DB |
 |---|---|---|---|
@@ -72,7 +72,7 @@ Grafana    ──► Prometheus
 
 ---
 
-## 📊 Observability Stack
+## ðŸ“Š Observability Stack
 
 | Tool | Role |
 |---|---|
@@ -100,44 +100,44 @@ Grafana    ──► Prometheus
 
 ---
 
-## 🚀 Roadmap
+## ðŸš€ Roadmap
 
 | Phase | Name | Status |
 |---|---|---|
-| 1 | Foundation — EKS, Kafka, PostgreSQL, Microservices | ✅ Done |
-| 2 | Observability — Prometheus + Grafana | ✅ Done |
-| 3 | Alerting — Alertmanager + Slack | ✅ Done |
-| 4 | Versioning — Git-SHA tags, immutable images | 🔜 Current |
-| 5 | Environments — dev / prod isolation | 🔜 Next |
-| 6 | CI/CD — Jenkins build once, promote through envs | 🔜 Upcoming |
-| 7 | Rollback — redeploy previous SHA | 🔜 Upcoming |
-| 8 | Access Layer — custom domain, HTTPS, Ingress | 🔜 Upcoming |
-| 9 | Control Plane UI — view services, alerts, restart | 🔜 Future |
-| 10 | Self-Healing — alert → automated recovery action | 🔜 Future |
-| 11 | AI Layer — anomaly detection, cost optimization | ⏳ Future |
-| 12 | Control Plane Service — admin APIs, guarded actions, audit | ✅ Done |
+| 1 | Foundation â€” EKS, Kafka, PostgreSQL, Microservices | âœ… Done |
+| 2 | Observability â€” Prometheus + Grafana | âœ… Done |
+| 3 | Alerting â€” Alertmanager + Slack | âœ… Done |
+| 4 | Versioning - Git-SHA tags, immutable images | Done |
+| 5 | Environments - dev / prod isolation | Done |
+| 6 | CI/CD - Jenkins build once, promote through envs | Done |
+| 7 | Rollback - redeploy previous SHA | Done |
+| 8 | Access Layer â€” custom domain, HTTPS, Ingress | ðŸ”œ Upcoming |
+| 9 | Control Plane UI â€” view services, alerts, restart | ðŸ”œ Future |
+| 10 | Self-Healing â€” alert â†’ automated recovery action | ðŸ”œ Future |
+| 11 | AI Layer â€” anomaly detection, cost optimization | â³ Future |
+| 12 | Control Plane Service â€” admin APIs, guarded actions, audit | âœ… Done |
 
-> **Current focus:** Phase 4 — replacing `:latest` tags with immutable Git-SHA image tags to enable rollback and traceability.
+> **Current focus:** Log Analyzer, AI Cost Advisor, and RAG over runbooks/docs/incidents with MCP-aligned integration.
 
 ---
 
-## 🛠️ Tech Stack
+## ðŸ› ï¸ Tech Stack
 
 | Layer | Technology |
 |---|---|
 | Services | Node.js |
 | Messaging | Apache Kafka + Zookeeper |
-| Databases | PostgreSQL 15 (per-service) · Redis |
+| Databases | PostgreSQL 15 (per-service) Â· Redis |
 | Orchestration | Kubernetes (AWS EKS) |
 | Containers | Docker |
 | Package management | Helm |
-| Observability | Prometheus · Grafana · Alertmanager |
+| Observability | Prometheus Â· Grafana Â· Alertmanager |
 | Registry | AWS ECR |
-| CI/CD *(upcoming)* | Jenkins |
+| CI/CD | Jenkins |
 
 ---
 
-## ⚙️ Local Development
+## âš™ï¸ Local Development
 
 ### Prerequisites
 
@@ -167,7 +167,7 @@ Local services use `_local` suffix for DBs and Kafka topics to stay isolated fro
 
 ---
 
-## 🚢 Deploy to Kubernetes
+## ðŸš¢ Deploy to Kubernetes
 
 ```bash
 # Apply manifests
@@ -184,12 +184,12 @@ kubectl logs deployment/payment-service -n dev --tail=50
 
 ---
 
-## 📦 Release & Rollback
+## ðŸ“¦ Release & Rollback
 
 The platform follows a **build once, promote everywhere** model:
 
 ```
-git push → Jenkins → build image → deploy to dev → promote to prod
+git push â†’ Jenkins â†’ build image â†’ deploy to dev â†’ promote to prod
 ```
 
 To rollback:
@@ -206,41 +206,41 @@ See the [Jenkins Promotion Runbook](./docs/jenkins-promotion-runbook.md) and [Ro
 
 ---
 
-## 📁 Project Structure
+## ðŸ“ Project Structure
 
 ```
 self-healing-cloud-platform/
-├── services/
-│   ├── user-service/
-│   ├── order-service/
-│   ├── payment-service/
-│   ├── product-service/
-│   └── search-service/
-├── k8s/
-│   ├── user-service/
-│   ├── order-service/
-│   ├── payment-service/
-│   ├── product-service/
-│   ├── search-service/
-│   ├── postgres/
-│   └── monitoring/
-├── docker-compose.yml
-└── README.md
+â”œâ”€â”€ services/
+â”‚   â”œâ”€â”€ user-service/
+â”‚   â”œâ”€â”€ order-service/
+â”‚   â”œâ”€â”€ payment-service/
+â”‚   â”œâ”€â”€ product-service/
+â”‚   â””â”€â”€ search-service/
+â”œâ”€â”€ k8s/
+â”‚   â”œâ”€â”€ user-service/
+â”‚   â”œâ”€â”€ order-service/
+â”‚   â”œâ”€â”€ payment-service/
+â”‚   â”œâ”€â”€ product-service/
+â”‚   â”œâ”€â”€ search-service/
+â”‚   â”œâ”€â”€ postgres/
+â”‚   â””â”€â”€ monitoring/
+â”œâ”€â”€ docker-compose.yml
+â””â”€â”€ README.md
 ```
 
 ---
 
-## 🧠 Key Design Principles
+## ðŸ§  Key Design Principles
 
-- **One service → one responsibility → one database**
-- **Kafka for all async communication** — REST for sync only
-- **Observability first** — metrics and alerts before features
-- **Version before automation** — immutable tags before CI/CD or self-healing
-- **Configuration over code** — only config differs between environments, never code
+- **One service â†’ one responsibility â†’ one database**
+- **Kafka for all async communication** â€” REST for sync only
+- **Observability first** â€” metrics and alerts before features
+- **Version before automation** â€” immutable tags before CI/CD or self-healing
+- **Configuration over code** â€” only config differs between environments, never code
 
 ---
 
-## 👤 Author
+## ðŸ‘¤ Author
 
 **Praveen Ranjan**
 - GitHub: [@colonelEnigma](https://github.com/colonelEnigma)
