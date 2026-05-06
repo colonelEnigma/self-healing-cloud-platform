@@ -30,6 +30,7 @@ Recent verified state:
 - Jenkins runs automatically every 2 minutes, so promotion/rollback detection is based on changed files since the previous successful commit when Jenkins provides that commit.
 - Current implementation focus is Log Analyzer, AI Cost Advisor, and RAG over runbooks/docs/incidents with MCP integration; canonical backend/shared context is `.context/backend-context.md`.
 - Chaos planning source of truth: `.context/control-plane-chaos-plan.md`.
+- Chaos scenario status: only `ScaleToZero` is currently executable in Phase 1; the rest of the scenario catalog entries are defined but intentionally disabled placeholders.
 - Frontend direction: treat the `cloudpulse-ui` shadcn/Tailwind UI as the primary frontend going forward. Any legacy/previous frontend implementations are not the default target for new UI work unless explicitly requested.
 - `user-service` role support is implemented and locally verified; login/profile expose `role`.
 - `services/control-plane-service` is implemented and deployed in `monitoring`; it exposes `/health`, `/metrics`, and admin-guarded `/api/control-plane/*` live read APIs plus guarded scale `0/1` with audit logging.

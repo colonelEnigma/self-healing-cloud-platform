@@ -57,7 +57,7 @@ Validated now:
 
 Current execution scope:
 - Only `ScaleToZero` is enabled for mutation in Phase 1.
-- Other scenarios are cataloged but disabled by design for later phases.
+- Other scenarios in the catalog (for example CrashLoop/CPU stress and related entries) are placeholders only and remain disabled by design for later phases.
 
 ## Local Dev Routing Model (CloudPulse UI)
 
