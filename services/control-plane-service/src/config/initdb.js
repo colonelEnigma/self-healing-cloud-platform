@@ -75,7 +75,39 @@ const initDb = async () => {
         ON control_plane_actions (service);
       `);
 
-      console.log("Control plane audit table ready");
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS chaos_scenario_executions (
+          id SERIAL PRIMARY KEY,
+          scenario_id VARCHAR(120) NOT NULL,
+          service VARCHAR(150) NOT NULL,
+          requested_by VARCHAR(255),
+          reason TEXT,
+          started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          expires_at TIMESTAMP NOT NULL,
+          reverted_at TIMESTAMP,
+          revert_mode VARCHAR(20),
+          status VARCHAR(30) NOT NULL DEFAULT 'active',
+          result VARCHAR(50) NOT NULL DEFAULT 'running',
+          metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb
+        );
+      `);
+
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_chaos_scenario_executions_status_expires
+        ON chaos_scenario_executions (status, expires_at);
+      `);
+
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_chaos_scenario_executions_service
+        ON chaos_scenario_executions (service);
+      `);
+
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_chaos_scenario_executions_scenario
+        ON chaos_scenario_executions (scenario_id);
+      `);
+
+      console.log("Control plane audit and chaos tables ready");
       return;
     } catch (err) {
       retries -= 1;

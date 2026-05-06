@@ -30,6 +30,13 @@ const {
   chatWithLmStudio,
   getAiAssistantStatus,
 } = require("../services/aiAssistantService");
+const {
+  ChaosServiceError,
+  getScenarioCatalog,
+  triggerScenarioExecution,
+  revertScenarioExecution,
+  revertAllActiveScenarioExecutions,
+} = require("../services/chaosService");
 
 const clampInteger = (value, fallback, min, max) => {
   const parsed = Number.parseInt(value, 10);
@@ -77,6 +84,11 @@ const buildActionPayload = (req, body = {}) => ({
     Number.isInteger(body.previousReplicas) ? body.previousReplicas : null,
   result: body.result || "error",
   reason: body.reason || null,
+});
+
+const getActorFromReq = (req) => ({
+  userId: req.user?.id || null,
+  userEmail: req.user?.email || null,
 });
 
 const getStatus = (req, res) => {
@@ -643,6 +655,128 @@ const getControlPlaneActions = async (req, res) => {
   }
 };
 
+const getChaosScenarios = async (req, res) => {
+  try {
+    const data = await getScenarioCatalog();
+    return res.status(200).json(data);
+  } catch (err) {
+    return res.status(500).json({
+      message: "Failed to load chaos scenario catalog",
+      error: err.message,
+    });
+  }
+};
+
+const postTriggerChaosScenario = async (req, res) => {
+  try {
+    const result = await triggerScenarioExecution({
+      scenarioId: req.body.scenarioId,
+      service: req.body.service,
+      typedServiceConfirmation:
+        req.body.typedServiceConfirmation ||
+        req.body.confirmationService ||
+        req.body.confirmation,
+      typedScenarioConfirmation:
+        req.body.typedScenarioConfirmation || req.body.confirmationScenario,
+      durationSeconds: req.body.durationSeconds,
+      reason: req.body.reason,
+      actor: getActorFromReq(req),
+    });
+
+    return res.status(201).json({
+      message: "Chaos scenario triggered",
+      scenario: result.scenario,
+      execution: result.execution,
+      scale: result.scale,
+      auditId: result.audit?.id || null,
+      auditedAt: result.audit?.created_at || null,
+    });
+  } catch (err) {
+    if (err instanceof ChaosServiceError) {
+      return res.status(err.statusCode).json({
+        message: err.message,
+        ...(err.details || {}),
+      });
+    }
+
+    return res.status(500).json({
+      message: "Failed to trigger chaos scenario",
+      error: err.message,
+    });
+  }
+};
+
+const postRevertChaosScenario = async (req, res) => {
+  const executionId =
+    req.body.executionId == null || req.body.executionId === ""
+      ? null
+      : Number.parseInt(req.body.executionId, 10);
+
+  if (req.body.executionId != null && !Number.isInteger(executionId)) {
+    return res.status(400).json({
+      message: "executionId must be an integer when provided",
+    });
+  }
+
+  try {
+    const result = await revertScenarioExecution({
+      executionId,
+      scenarioId: req.body.scenarioId || null,
+      service: req.body.service || null,
+      actor: getActorFromReq(req),
+      revertMode: "manual",
+    });
+
+    return res.status(200).json({
+      message: result.alreadyReverted
+        ? "Scenario execution was already reverted"
+        : "Scenario execution reverted",
+      alreadyReverted: result.alreadyReverted,
+      execution: result.execution,
+      scale: result.scale || null,
+      auditId: result.audit?.id || null,
+      auditedAt: result.audit?.created_at || null,
+    });
+  } catch (err) {
+    if (err instanceof ChaosServiceError) {
+      return res.status(err.statusCode).json({
+        message: err.message,
+        ...(err.details || {}),
+      });
+    }
+
+    return res.status(500).json({
+      message: "Failed to revert chaos scenario execution",
+      error: err.message,
+    });
+  }
+};
+
+const postRevertAllChaosScenarios = async (req, res) => {
+  try {
+    const result = await revertAllActiveScenarioExecutions({
+      actor: getActorFromReq(req),
+    });
+
+    return res.status(200).json({
+      message: "Processed revert-all request for active chaos scenarios",
+      ...result,
+    });
+  } catch (err) {
+    if (err instanceof ChaosServiceError) {
+      return res.status(err.statusCode).json({
+        message: err.message,
+        ...(err.details || {}),
+      });
+    }
+
+    return res.status(500).json({
+      message: "Failed to revert all active chaos scenarios",
+      error: err.message,
+    });
+  }
+};
+
 const getAiStatus = (req, res) => {
   res.status(200).json(getAiAssistantStatus());
 };
@@ -688,6 +822,10 @@ module.exports = {
   getServiceEventsHandler,
   postScaleAction,
   getControlPlaneActions,
+  getChaosScenarios,
+  postTriggerChaosScenario,
+  postRevertChaosScenario,
+  postRevertAllChaosScenarios,
   getAiStatus,
   postAiChat,
 };

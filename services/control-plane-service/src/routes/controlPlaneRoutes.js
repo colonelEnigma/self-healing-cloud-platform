@@ -15,6 +15,10 @@ const {
   getServiceEventsHandler,
   postScaleAction,
   getControlPlaneActions,
+  getChaosScenarios,
+  postTriggerChaosScenario,
+  postRevertChaosScenario,
+  postRevertAllChaosScenarios,
   getAiStatus,
   postAiChat,
 } = require("../controllers/controlPlaneController");
@@ -48,6 +52,10 @@ router.get(
 );
 router.post("/actions/scale", postScaleAction);
 router.get("/actions", getControlPlaneActions);
+router.get("/demo/scenarios", getChaosScenarios);
+router.post("/demo/scenarios/trigger", postTriggerChaosScenario);
+router.post("/demo/scenarios/revert", postRevertChaosScenario);
+router.post("/demo/scenarios/revert-all", postRevertAllChaosScenarios);
 router.get("/ai/status", getAiStatus);
 router.post("/ai/chat", postAiChat);
 

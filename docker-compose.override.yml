@@ -1,0 +1,8 @@
+services:
+  control-plane-service:
+    environment:
+      KUBECONFIG: /kube/config
+      AWS_PROFILE: default
+    volumes:
+      - C:/Users/ranja/.kube/config:/kube/config:ro
+      - C:/Users/ranja/.aws:/root/.aws:ro

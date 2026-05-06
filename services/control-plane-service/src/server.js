@@ -2,6 +2,9 @@ require("dotenv").config();
 
 const app = require("./app");
 const initDb = require("./config/initdb");
+const {
+  startChaosAutoRevertScheduler,
+} = require("./services/chaosSchedulerService");
 
 const PORT = process.env.PORT || 7100;
 
@@ -13,6 +16,7 @@ if (!process.env.JWT_SECRET) {
 const startServer = async () => {
   try {
     await initDb();
+    startChaosAutoRevertScheduler();
 
     app.listen(PORT, () => {
       console.log(`Control Plane Service running on port ${PORT}`);

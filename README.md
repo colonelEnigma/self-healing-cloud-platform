@@ -115,6 +115,7 @@ Grafana    ──► Prometheus
 | 9 | Control Plane UI — view services, alerts, restart | 🔜 Future |
 | 10 | Self-Healing — alert → automated recovery action | 🔜 Future |
 | 11 | AI Layer — anomaly detection, cost optimization | ⏳ Future |
+| 12 | Control Plane Service — admin APIs, guarded actions, audit | ✅ Done |
 
 > **Current focus:** Phase 4 — replacing `:latest` tags with immutable Git-SHA image tags to enable rollback and traceability.
 
@@ -201,7 +202,7 @@ kubectl set image deployment/<service> \
 kubectl rollout status deployment/<service> -n prod
 ```
 
-See the full [Release + Promotion + Rollback Runbook](./docs/runbooks/release-promotion-rollback.md) for details.
+See the [Jenkins Promotion Runbook](./docs/jenkins-promotion-runbook.md) and [Rollback Runbook](./docs/rollback-runbook.md) for details.
 
 ---
 

@@ -18,9 +18,4 @@ build/
 # coverage
 coverage/
 
-# context files
-.context/
-
-AGENTS.md
-
 .vscode/

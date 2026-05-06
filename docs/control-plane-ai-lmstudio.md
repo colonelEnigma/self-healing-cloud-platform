@@ -137,6 +137,7 @@ Supported modes:
 | `contextBaseUrlConfigured:false` from `/ai/status` | Local Control Plane container is missing `CONTROL_PLANE_CONTEXT_BASE_URL` | Rebuild/restart `control-plane-service` with docker-compose config |
 | AI says `deployments unavailable: connect ECONNREFUSED ::1:8080` | AI backend is reading local Kubernetes context instead of prod Control Plane context | Confirm `CONTROL_PLANE_CONTEXT_BASE_URL=http://host.docker.internal:18080/api/control-plane` |
 | AI says `healer-service ENOTFOUND` | Local Docker context cannot resolve cluster healer service | Use prod Control Plane context through `18080` |
+| `POST /api/control-plane/demo/scenarios/trigger` returns `503` with `Cannot read properties of null (reading 'toString')` | Local `control-plane-service` tries kubeconfig exec-auth but container is missing `aws` CLI | Check `docker-compose exec control-plane-service aws --version`; install AWS CLI in image, keep kubeconfig and `~/.aws` mounts, rebuild service |
 | AI claims `payment-service` is down while prod is healthy | Old local Prometheus target pointed at the wrong payment port | Use the corrected Docker Prometheus payment target on `payment-service:4000` |
 | LM Studio returns model not found | Config uses display name instead of LM Studio model id | Use `LM_STUDIO_MODEL=google/gemma-3-4b` |
 | AI request times out | Local model is slow to respond | Use `LM_STUDIO_TIMEOUT_MS=120000` |
