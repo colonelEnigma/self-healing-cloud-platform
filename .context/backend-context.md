@@ -1,6 +1,6 @@
 # Backend Context (Canonical)
 
-Last updated: 2026-05-06
+Last updated: 2026-05-07
 
 ## Purpose
 
@@ -56,8 +56,9 @@ Validated now:
 - Max active scenario limit behavior (`CHAOS_MAX_ACTIVE_SCENARIOS`, default 3)
 
 Current execution scope:
-- Only `ScaleToZero` is enabled for mutation in Phase 1.
-- Other scenarios in the catalog (for example CrashLoop/CPU stress and related entries) are placeholders only and remain disabled by design for later phases.
+- `ScaleToZero` and `ImagePullFailSimulation` are enabled for Phase 1 execution.
+- `ImagePullFailSimulation` has been validated end-to-end in `monitoring`, including deterministic auto-revert and audit visibility.
+- Other scenarios in the catalog (for example CrashLoop/CPU stress and related entries) remain disabled placeholders for later phases.
 
 ## Local Dev Routing Model (CloudPulse UI)
 

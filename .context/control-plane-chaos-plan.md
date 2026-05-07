@@ -1,7 +1,7 @@
 # Control Plane Chaos Plan
 
-Last updated: 2026-05-04
-Status: Phase 0 completed; Phase 1 implemented in repo with local runtime validation blocker
+Last updated: 2026-05-07
+Status: Phase 0 completed; Phase 1 implemented and validated for two executable scenarios
 Scope: Admin-triggered chaos scenarios and backend implementation for self-healing + analysis
 
 ## Goal
@@ -311,7 +311,7 @@ Exit criteria:
 - Manual revert and revert-all verified.
 - All scenario actions are audited.
 
-Phase 1 execution status (2026-05-03):
+Phase 1 execution status (updated 2026-05-07):
 
 - DONE (repo): scenario catalog endpoint implemented:
   - `GET /api/control-plane/demo/scenarios`
@@ -329,28 +329,14 @@ Phase 1 execution status (2026-05-03):
   - max concurrent active scenarios
   - idempotent revert behavior
   - control-plane audit entries for trigger/revert success and blocked/error flows
-- DONE (repo tests): controller + AI tests passing (`9/9`).
-- NOTE: only `ScaleToZero` is enabled for execution in Phase 1 to preserve current mutation guardrails (`replicas` patch only). Remaining catalog scenarios are defined but disabled for later phases.
-
-Phase 1 local runtime blocker (2026-05-04):
-
-- BLOCKED (local validation path): frontend trigger call returns `503` on:
-  - `POST /api/control-plane/demo/scenarios/trigger`
-- Observed error payload:
-  - `Failed to fetch current deployment state: Cannot read properties of null (reading 'toString')`
-- Root cause identified:
-  - local `control-plane-service` uses kubeconfig exec-auth (`aws eks get-token`)
-  - container has kubeconfig mounted (`KUBECONFIG=/kube/config`) but does not include `aws` CLI binary
-- Evidence:
-  - `docker-compose exec control-plane-service printenv KUBECONFIG` -> `/kube/config`
-  - `docker-compose exec control-plane-service aws --version` -> `exec: "aws": executable file not found in $PATH`
-- Impact:
-  - local chaos trigger/revert paths that require live kube reads fail in docker-local mode
-  - repo implementation remains complete; blocker is runtime image/tooling
-- Next-chat resume point:
-  - update `services/control-plane-service/Dockerfile` to include AWS CLI for exec-auth
-  - rebuild/restart `control-plane-service`
-  - rerun Phase 1 local validations end-to-end and then proceed to Phase 2
+- DONE (repo tests): controller + AI tests passing, plus chaos-service scenario tests for image patch trigger/revert.
+- DONE (execution scope): `ScaleToZero` and `ImagePullFailSimulation` are both executable in Phase 1.
+- DONE (runtime validation): `ImagePullFailSimulation` validated in `monitoring` with:
+  - typed-confirmed trigger
+  - fixed-duration execution
+  - deterministic auto-revert to stored original image
+  - revert visibility in execution/audit records
+- NOTE: remaining catalog scenarios are intentionally disabled placeholders for later phases.
 
 ### Phase 2: Incident Timeline + Log Analyzer (Deterministic)
 
