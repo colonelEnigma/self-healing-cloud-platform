@@ -1,7 +1,7 @@
 # Control Plane Chaos Plan
 
 Last updated: 2026-05-07
-Status: Phase 0 completed; Phase 1 implemented and validated for three executable scenarios
+Status: Phase 0 completed; Phase 1 implemented and validated for four executable scenarios
 Scope: Admin-triggered chaos scenarios and backend implementation for self-healing + analysis
 
 ## Goal
@@ -28,69 +28,25 @@ Provide a single source of truth for:
 - Immediate manual rollback for active scenarios.
 - Must be visible in Admin UI and logged.
 
-## Scenario Categories
+## Canonical Scenario Catalog (Deduplicated)
 
-### 1) Availability Failures
+Selectable canonical scenarios (max 10):
 
-- `ScaleToZero`: Set selected allowlisted service replicas to `0`.
-- `CrashLoopSimulation`: Force repeated restarts.
-- `ImagePullFailSimulation`: Use invalid image tag for rollout.
-- `StuckRolloutSimulation`: New pods fail to become ready.
+- `ScaleToZero` (enabled)
+- `ImagePullFailSimulation` (enabled)
+- `BadReadinessProbe` (enabled)
+- `BadLivenessProbe` (enabled)
+- `ProbeTimeoutSpike` (disabled placeholder)
+- `LatencyInjection` (disabled placeholder)
+- `ErrorRateSpike` (disabled placeholder)
+- `DatabaseUnavailable` (disabled placeholder)
+- `KafkaUnavailable` (disabled placeholder)
+- `MetricsPipelineDrop` (disabled placeholder)
 
-### 2) Health Probe Failures
+Migration note for UI/API clients:
 
-- `BadReadinessProbe`: Misconfigure readiness path/port.
-- `BadLivenessProbe`: Misconfigure liveness and induce restarts.
-- `ProbeTimeoutSpike`: Simulate slow startup/response probe timeout.
-
-### 3) Performance Degradation
-
-- `CPUStress`: Inject CPU pressure.
-- `MemoryStress`: Inject memory pressure.
-- `LatencyInjection`: Add fixed endpoint delay.
-- `SlowDependency`: Simulate slow upstream dependency.
-
-### 4) Error & Reliability Failures
-
-- `ErrorRateSpike`: Inject controlled 5xx response rate.
-- `RetryStorm`: Simulate retry amplification.
-- `ThunderingHerdRecovery`: Simulate recovery surge traffic.
-- `CircuitBreakerOpenSimulation`: Trigger downstream failures to open breaker.
-
-### 5) Dependency Failures
-
-- `DatabaseUnavailable`: Temporarily break DB connectivity.
-- `KafkaUnavailable`: Temporarily break broker connectivity.
-- `DNSResolutionFailure`: Simulate intermittent DNS failure.
-- `ConnectionPoolExhaustion`: Simulate exhausted client pools.
-- `UpstreamRateLimit`: Simulate upstream throttling.
-
-### 6) Deployment & Config Regressions
-
-- `ConfigRegression`: Apply known-bad safe config with auto-revert.
-- `SecretConfigDrift`: Simulate inconsistent config across pods.
-- `JWTMismatch`: Simulate auth secret mismatch.
-- `SchemaOrderMismatch`: Simulate app/dependency compatibility mismatch.
-
-### 7) Messaging & Data Pipeline Issues
-
-- `ConsumerLagSpike`: Simulate Kafka consumer lag.
-- `PoisonMessageLoop`: Simulate repeated bad message failures.
-- `IdempotencyFailureSimulation`: Simulate duplicate effects under retry.
-
-### 8) Infrastructure & Platform Disruptions
-
-- `PodEvictionSimulation`: Simulate node/pod disruption.
-- `PartialZoneImpairment`: Simulate subset pod degradation.
-- `EphemeralStoragePressure`: Simulate disk pressure instability.
-- `ScopedEgressDeny`: Temporary scoped network deny for one dependency.
-
-### 9) Observability & Control Plane Blind Spots
-
-- `MetricsPipelineDrop`: Simulate missing metrics.
-- `LogPipelineDrop`: Simulate missing log ingestion.
-- `AlertRouteMisconfig`: Simulate alert routing failure.
-- `HealerRateLimitConflict`: Simulate repeated incidents versus healer limits.
+- Only canonical scenario IDs are accepted.
+- Legacy scenario IDs are removed and will return validation errors.
 
 ## UI Presentation Model
 
@@ -331,7 +287,7 @@ Phase 1 execution status (updated 2026-05-07):
   - control-plane audit entries for trigger/revert success and blocked/error flows
 - DONE (repo tests): controller + AI tests passing, plus chaos-service scenario tests for image patch trigger/revert.
 - DONE (repo tests): readiness-probe scenario tests added for trigger/revert behavior.
-- DONE (execution scope): `ScaleToZero`, `ImagePullFailSimulation`, and `BadReadinessProbe` are executable in Phase 1.
+- DONE (execution scope): `ScaleToZero`, `ImagePullFailSimulation`, `BadReadinessProbe`, and `BadLivenessProbe` are executable in Phase 1.
 - DONE (runtime validation): `ImagePullFailSimulation` validated in `monitoring` with:
   - typed-confirmed trigger
   - fixed-duration execution
@@ -342,7 +298,29 @@ Phase 1 execution status (updated 2026-05-07):
   - fixed-duration execution
   - deterministic auto-revert to stored original readiness probe
   - revert visibility in execution/audit records
-- NOTE: remaining catalog scenarios are intentionally disabled placeholders for later phases.
+- DONE (runtime implementation): `BadLivenessProbe` implemented with the same safety pattern:
+  - typed-confirmed trigger
+  - fixed-duration execution
+  - deterministic auto-revert to stored original liveness probe
+  - revert visibility in execution/audit records
+- DONE (catalog dedup): scenario catalog reduced to canonical template set.
+- NOTE: non-canonical legacy scenario IDs are no longer accepted by trigger/revert-by-scenario flows.
+- DONE (frontend verification): Control Panel UI validated against canonical scenario catalog via the standard `/api/control-plane/* -> http://localhost:18080` path after refreshing the local tunnel/backend image alignment.
+
+Phase 1 validation commands for `BadLivenessProbe` (run against control-plane API):
+
+1. Trigger:
+- `curl -X POST "$CONTROL_PLANE_BASE/api/control-plane/demo/scenarios/trigger" -H "Content-Type: application/json" -H "Authorization: Bearer $ADMIN_JWT" -d "{\"scenarioId\":\"BadLivenessProbe\",\"service\":\"payment-service\",\"typedServiceConfirmation\":\"payment-service\",\"typedScenarioConfirmation\":\"BadLivenessProbe\",\"durationSeconds\":180,\"reason\":\"phase1-liveness-validation\"}"`
+
+2. Check active execution and metadata:
+- `curl "$CONTROL_PLANE_BASE/api/control-plane/demo/scenarios" -H "Authorization: Bearer $ADMIN_JWT"`
+
+3. Observe pod restart symptoms/events:
+- `kubectl get pods -n prod -l app=payment-service -w`
+- `kubectl get events -n prod --field-selector involvedObject.kind=Pod | grep payment-service`
+
+4. Verify deterministic auto-revert after expiry:
+- `curl "$CONTROL_PLANE_BASE/api/control-plane/demo/scenarios" -H "Authorization: Bearer $ADMIN_JWT"`
 
 ### Phase 2: Incident Timeline + Log Analyzer (Deterministic)
 

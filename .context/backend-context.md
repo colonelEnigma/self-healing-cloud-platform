@@ -52,15 +52,22 @@ Validated now:
 - `ScaleToZero` trigger flow
 - `ImagePullFailSimulation` trigger/revert flow
 - `BadReadinessProbe` trigger/revert flow
+- `BadLivenessProbe` trigger/revert flow
 - Manual revert (single active execution)
 - Revert all active executions
 - Audit trail visibility for actions
 - Max active scenario limit behavior (`CHAOS_MAX_ACTIVE_SCENARIOS`, default 3)
 
 Current execution scope:
-- `ScaleToZero`, `ImagePullFailSimulation`, and `BadReadinessProbe` are enabled for Phase 1 execution.
+- `ScaleToZero`, `ImagePullFailSimulation`, `BadReadinessProbe`, and `BadLivenessProbe` are enabled for Phase 1 execution.
 - `ImagePullFailSimulation` and `BadReadinessProbe` have been validated end-to-end in `monitoring` (including UI trigger path), with deterministic auto-revert and audit visibility.
-- Other scenarios in the catalog (for example CrashLoop/CPU stress and related entries) remain disabled placeholders for later phases.
+- `BadLivenessProbe` follows the same deterministic typed-confirmed trigger and stored-original-probe auto-revert model with no RBAC expansion (deployments patch only).
+- Catalog dedup is in effect: the visible/selectable scenario list is canonicalized to:
+  - `ScaleToZero`, `ImagePullFailSimulation`, `BadReadinessProbe`, `BadLivenessProbe`, `ProbeTimeoutSpike`, `LatencyInjection`, `ErrorRateSpike`, `DatabaseUnavailable`, `KafkaUnavailable`, `MetricsPipelineDrop`.
+- Legacy IDs (for example `CrashLoopSimulation`, `CPUStress`, `RetryStorm`, `LogPipelineDrop`) are no longer accepted.
+- Migration note for UI/API clients: use canonical IDs only.
+- Frontend validation complete: Control Panel Chaos page now shows the canonical 10-scenario catalog when routed through the standard local control-plane tunnel (`http://localhost:18080`).
+- Operational note: if UI and direct backend responses diverge, verify the `18080` tunnel target first before changing frontend code.
 
 ## Local Dev Routing Model (CloudPulse UI)
 

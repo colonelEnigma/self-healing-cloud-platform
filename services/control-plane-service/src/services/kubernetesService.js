@@ -537,6 +537,57 @@ const patchServiceReadinessProbe = async ({
   };
 };
 
+const patchServiceLivenessProbe = async ({
+  service,
+  containerName,
+  livenessProbe,
+}) => {
+  const { appsApi } = getKubernetesClients();
+  const deployment = await appsApi.readNamespacedDeployment(
+    service,
+    CONTROL_PLANE_NAMESPACE,
+  );
+
+  const containers = deployment.body?.spec?.template?.spec?.containers || [];
+  const container =
+    containers.find((c) => c.name === containerName) ||
+    containers.find((c) => c.name === service) ||
+    containers[0];
+
+  if (!container || !container.name) {
+    throw new Error(`Container ${containerName || "auto"} not found in deployment ${service}`);
+  }
+
+  await appsApi.patchNamespacedDeployment(
+    service,
+    CONTROL_PLANE_NAMESPACE,
+    {
+      spec: {
+        template: {
+          spec: {
+            containers: [{ name: container.name, livenessProbe }],
+          },
+        },
+      },
+    },
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    strategicMergePatchOptions,
+  );
+
+  return {
+    containerName: container.name,
+    previousLivenessProbe: container.livenessProbe || null,
+    requestedLivenessProbe: livenessProbe,
+    changed:
+      JSON.stringify(container.livenessProbe || null) !==
+      JSON.stringify(livenessProbe || null),
+  };
+};
+
 module.exports = {
   getKubernetesClients,
   getAllowlistedDeploymentSummaries,
@@ -547,4 +598,5 @@ module.exports = {
   scaleServiceDeployment,
   patchServiceContainerImage,
   patchServiceReadinessProbe,
+  patchServiceLivenessProbe,
 };

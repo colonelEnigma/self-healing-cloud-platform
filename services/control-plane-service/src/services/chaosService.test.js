@@ -8,6 +8,7 @@ jest.mock("./kubernetesService", () => ({
   scaleServiceDeployment: jest.fn(),
   patchServiceContainerImage: jest.fn(),
   patchServiceReadinessProbe: jest.fn(),
+  patchServiceLivenessProbe: jest.fn(),
 }));
 
 jest.mock("./auditService", () => ({
@@ -29,6 +30,7 @@ const {
   getServiceDeploymentSummary,
   patchServiceContainerImage,
   patchServiceReadinessProbe,
+  patchServiceLivenessProbe,
 } = require("./kubernetesService");
 const { recordControlPlaneAction } = require("./auditService");
 const {
@@ -168,6 +170,20 @@ describe("chaosService image patch scenario", () => {
       }),
     ).rejects.toBeInstanceOf(ChaosServiceError);
   });
+
+  it("rejects deprecated/non-canonical scenario id", async () => {
+    await expect(
+      triggerScenarioExecution({
+        scenarioId: "CrashLoopSimulation",
+        service: "payment-service",
+        typedServiceConfirmation: "payment-service",
+        typedScenarioConfirmation: "CrashLoopSimulation",
+        durationSeconds: 180,
+        reason: "alias demo",
+        actor: { userId: 2, userEmail: "admin@example.test" },
+      }),
+    ).rejects.toBeInstanceOf(ChaosServiceError);
+  });
 });
 
 describe("chaosService readiness probe scenario", () => {
@@ -295,5 +311,133 @@ describe("chaosService readiness probe scenario", () => {
     });
     expect(result.alreadyReverted).toBe(false);
     expect(result.mutation.type).toBe("patch_readiness_probe");
+  });
+});
+
+describe("chaosService liveness probe scenario", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    isAllowedDeployment.mockReturnValue(true);
+    countActiveExecutions.mockResolvedValue(0);
+    findActiveExecutionByService.mockResolvedValue(null);
+    recordControlPlaneAction.mockResolvedValue({ id: 1, created_at: "2026-05-07T00:00:00.000Z" });
+  });
+
+  it("triggers BadLivenessProbe with deterministic liveness metadata", async () => {
+    patchServiceLivenessProbe.mockResolvedValue({
+      containerName: "payment-service",
+      previousLivenessProbe: {
+        httpGet: { path: "/health", port: 4000 },
+        periodSeconds: 5,
+      },
+      requestedLivenessProbe: {
+        httpGet: { path: "/__chaos__/not-live", port: 65535 },
+        initialDelaySeconds: 0,
+        periodSeconds: 5,
+        timeoutSeconds: 1,
+        failureThreshold: 1,
+      },
+      changed: true,
+    });
+    createExecution.mockResolvedValue({
+      id: 13,
+      scenario_id: "BadLivenessProbe",
+      service: "payment-service",
+      requested_by: "admin@example.test",
+      reason: "liveness demo",
+      started_at: "2026-05-07T00:00:00.000Z",
+      expires_at: "2026-05-07T00:03:00.000Z",
+      reverted_at: null,
+      revert_mode: null,
+      status: "active",
+      result: "running",
+      metadata_json: {},
+    });
+
+    const result = await triggerScenarioExecution({
+      scenarioId: "BadLivenessProbe",
+      service: "payment-service",
+      typedServiceConfirmation: "payment-service",
+      typedScenarioConfirmation: "BadLivenessProbe",
+      durationSeconds: 180,
+      reason: "liveness demo",
+      actor: { userId: 2, userEmail: "admin@example.test" },
+    });
+
+    expect(patchServiceLivenessProbe).toHaveBeenCalledWith({
+      service: "payment-service",
+      containerName: "payment-service",
+      livenessProbe: {
+        httpGet: { path: "/__chaos__/not-live", port: 65535 },
+        initialDelaySeconds: 0,
+        periodSeconds: 5,
+        timeoutSeconds: 1,
+        failureThreshold: 1,
+      },
+    });
+    expect(result.mutation.type).toBe("patch_liveness_probe");
+  });
+
+  it("reverts BadLivenessProbe execution using stored probe config", async () => {
+    findExecutionForManualRevert.mockResolvedValue({
+      id: 24,
+      scenario_id: "BadLivenessProbe",
+      service: "payment-service",
+      status: "active",
+      metadata_json: {
+        containerName: "payment-service",
+        originalLivenessProbe: {
+          httpGet: { path: "/health", port: 4000 },
+          periodSeconds: 5,
+        },
+      },
+    });
+    patchServiceLivenessProbe.mockResolvedValue({
+      containerName: "payment-service",
+      previousLivenessProbe: {
+        httpGet: { path: "/__chaos__/not-live", port: 65535 },
+      },
+      requestedLivenessProbe: {
+        httpGet: { path: "/health", port: 4000 },
+        periodSeconds: 5,
+      },
+      changed: true,
+    });
+    markExecutionReverted.mockResolvedValue({
+      id: 24,
+      scenario_id: "BadLivenessProbe",
+      service: "payment-service",
+      requested_by: "admin@example.test",
+      reason: "liveness demo",
+      started_at: "2026-05-07T00:00:00.000Z",
+      expires_at: "2026-05-07T00:03:00.000Z",
+      reverted_at: "2026-05-07T00:01:00.000Z",
+      revert_mode: "manual",
+      status: "reverted",
+      result: "success",
+      metadata_json: {
+        revertedToLivenessProbe: {
+          httpGet: { path: "/health", port: 4000 },
+          periodSeconds: 5,
+        },
+      },
+    });
+
+    const result = await revertScenarioExecution({
+      executionId: 24,
+      actor: { userId: 2, userEmail: "admin@example.test" },
+      revertMode: "manual",
+    });
+
+    expect(patchServiceLivenessProbe).toHaveBeenCalledWith({
+      service: "payment-service",
+      containerName: "payment-service",
+      livenessProbe: {
+        httpGet: { path: "/health", port: 4000 },
+        periodSeconds: 5,
+      },
+    });
+    expect(result.alreadyReverted).toBe(false);
+    expect(result.mutation.type).toBe("patch_liveness_probe");
   });
 });

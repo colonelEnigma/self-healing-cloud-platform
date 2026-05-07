@@ -3,15 +3,17 @@ const {
   isAllowedDeployment,
 } = require("../config/allowlist");
 const {
-  CHAOS_SCENARIOS,
+  CANONICAL_SCENARIOS,
   MAX_ACTIVE_CHAOS_SCENARIOS,
   getScenarioById,
+  resolveScenarioId,
 } = require("../config/chaosScenarios");
 const {
   getServiceDeploymentSummary,
   scaleServiceDeployment,
   patchServiceContainerImage,
   patchServiceReadinessProbe,
+  patchServiceLivenessProbe,
 } = require("./kubernetesService");
 const {
   recordControlPlaneAction,
@@ -178,7 +180,7 @@ const getScenarioCatalog = async () => {
     maxActiveScenarios: MAX_ACTIVE_CHAOS_SCENARIOS,
     activeScenarioCount: activeExecutions.length,
     generatedAt: new Date().toISOString(),
-    scenarios: CHAOS_SCENARIOS.map((scenario) => ({
+    scenarios: CANONICAL_SCENARIOS.map((scenario) => ({
       id: scenario.id,
       category: scenario.category,
       name: scenario.name,
@@ -312,6 +314,44 @@ const revertExecutionRecord = async ({
     };
   }
 
+  if (scenario.executionType === "patch_liveness_probe") {
+    const originalLivenessProbe = execution.metadata_json?.originalLivenessProbe;
+    const containerName = execution.metadata_json?.containerName;
+
+    if (!originalLivenessProbe || !containerName) {
+      throw new ChaosServiceError(
+        409,
+        "Missing revert metadata for BadLivenessProbe",
+        { executionId: execution.id },
+      );
+    }
+
+    const patchResult = await patchServiceLivenessProbe({
+      service: execution.service,
+      containerName,
+      livenessProbe: originalLivenessProbe,
+    });
+
+    const revertedExecution = await markExecutionReverted({
+      id: execution.id,
+      revertMode,
+      result: "success",
+      metadataJson: {
+        lastRevertAt: new Date().toISOString(),
+        revertedToLivenessProbe: originalLivenessProbe,
+        revertChanged: patchResult.changed,
+      },
+    });
+
+    return {
+      execution: summarizeExecution(revertedExecution),
+      mutationResult: {
+        type: "patch_liveness_probe",
+        ...patchResult,
+      },
+    };
+  }
+
   throw new ChaosServiceError(
     400,
     `Scenario ${execution.scenario_id} is not revert-enabled in Phase 1`,
@@ -331,7 +371,12 @@ const triggerScenarioExecution = async ({
   reason,
   actor,
 }) => {
-  const scenario = getScenarioById(scenarioId);
+  const resolvedScenarioId = resolveScenarioId(scenarioId);
+  const scenario = resolvedScenarioId
+    ? getScenarioById(resolvedScenarioId.canonicalId)
+    : null;
+  const requestedScenarioId = resolvedScenarioId?.originalId || scenarioId;
+  const canonicalScenarioId = resolvedScenarioId?.canonicalId || null;
   const action = "chaos_trigger";
 
   const auditFailureAndThrow = async (statusCode, message, details = {}) => {
@@ -343,7 +388,7 @@ const triggerScenarioExecution = async ({
       previousReplicas: null,
       result: statusCode < 500 ? "blocked" : "error",
       reason: buildAuditReason({
-        scenarioId: scenarioId || "unknown",
+        scenarioId: canonicalScenarioId || requestedScenarioId || "unknown",
         message,
         extra: details?.extra || null,
       }),
@@ -377,7 +422,10 @@ const triggerScenarioExecution = async ({
     );
   }
 
-  if (typedScenarioConfirmation !== scenario.id) {
+  if (
+    typedScenarioConfirmation !== scenario.id &&
+    typedScenarioConfirmation !== requestedScenarioId
+  ) {
     await auditFailureAndThrow(
       400,
       "Typed scenario confirmation must exactly match scenarioId",
@@ -670,6 +718,89 @@ const triggerScenarioExecution = async ({
     };
   }
 
+  if (scenario.executionType === "patch_liveness_probe") {
+    const chaosLivenessProbe = {
+      httpGet: {
+        path: scenario.chaosLivenessPath || "/__chaos__/not-live",
+        port: scenario.chaosLivenessPort || 65535,
+      },
+      initialDelaySeconds: 0,
+      periodSeconds: 5,
+      timeoutSeconds: 1,
+      failureThreshold: 1,
+    };
+
+    let patchResult;
+    try {
+      patchResult = await patchServiceLivenessProbe({
+        service,
+        containerName: service,
+        livenessProbe: chaosLivenessProbe,
+      });
+    } catch (err) {
+      await auditFailureAndThrow(503, `Failed to apply scenario: ${err.message}`);
+    }
+
+    if (!patchResult.previousLivenessProbe) {
+      await auditFailureAndThrow(409, "Current liveness probe is missing");
+    }
+
+    const startedAt = new Date();
+    const expiresAt = new Date(
+      startedAt.getTime() + resolvedDurationSeconds * 1000,
+    );
+
+    const execution = await createExecution({
+      scenarioId: scenario.id,
+      service,
+      requestedBy: actor?.userEmail || null,
+      reason: reason || null,
+      startedAt: startedAt.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+      metadataJson: {
+        namespace: CONTROL_PLANE_NAMESPACE,
+        containerName: patchResult.containerName,
+        originalLivenessProbe: patchResult.previousLivenessProbe,
+        chaosLivenessProbe: patchResult.requestedLivenessProbe,
+        durationSeconds: resolvedDurationSeconds,
+        triggeredBy: actor?.userEmail || null,
+        triggerSource: "api",
+      },
+    });
+
+    const audit = await writeChaosAudit({
+      actor,
+      action,
+      service,
+      requestedReplicas: null,
+      previousReplicas: null,
+      result: "success",
+      reason: buildAuditReason({
+        scenarioId: scenario.id,
+        message: "triggered",
+        durationSeconds: resolvedDurationSeconds,
+        extra: `chaosLivenessPath=${chaosLivenessProbe.httpGet.path}; chaosLivenessPort=${chaosLivenessProbe.httpGet.port}${reason ? `; reason=${reason}` : ""}`,
+      }),
+    });
+
+    return {
+      scenario: {
+        id: scenario.id,
+        name: scenario.name,
+        category: scenario.category,
+        autoRevert: scenario.autoRevert,
+      },
+      execution: summarizeExecution(execution),
+      mutation: {
+        type: "patch_liveness_probe",
+        previousLivenessProbe: patchResult.previousLivenessProbe,
+        requestedLivenessProbe: patchResult.requestedLivenessProbe,
+        changed: patchResult.changed,
+      },
+      audit,
+    };
+  }
+
   await auditFailureAndThrow(
     400,
     `Scenario ${scenario.id} is not executable in Phase 1`,
@@ -684,9 +815,10 @@ const revertScenarioExecution = async ({
   revertMode = "manual",
 }) => {
   const action = "chaos_revert";
+  const resolvedScenario = scenarioId ? resolveScenarioId(scenarioId) : null;
   const execution = await findExecutionForManualRevert({
     executionId,
-    scenarioId,
+    scenarioId: resolvedScenario?.canonicalId || scenarioId,
     service,
   });
 
