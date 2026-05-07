@@ -1,7 +1,7 @@
 # Control Plane Chaos Plan
 
 Last updated: 2026-05-07
-Status: Phase 0 completed; Phase 1 implemented and validated for two executable scenarios
+Status: Phase 0 completed; Phase 1 implemented and validated for three executable scenarios
 Scope: Admin-triggered chaos scenarios and backend implementation for self-healing + analysis
 
 ## Goal
@@ -330,11 +330,17 @@ Phase 1 execution status (updated 2026-05-07):
   - idempotent revert behavior
   - control-plane audit entries for trigger/revert success and blocked/error flows
 - DONE (repo tests): controller + AI tests passing, plus chaos-service scenario tests for image patch trigger/revert.
-- DONE (execution scope): `ScaleToZero` and `ImagePullFailSimulation` are both executable in Phase 1.
+- DONE (repo tests): readiness-probe scenario tests added for trigger/revert behavior.
+- DONE (execution scope): `ScaleToZero`, `ImagePullFailSimulation`, and `BadReadinessProbe` are executable in Phase 1.
 - DONE (runtime validation): `ImagePullFailSimulation` validated in `monitoring` with:
   - typed-confirmed trigger
   - fixed-duration execution
   - deterministic auto-revert to stored original image
+  - revert visibility in execution/audit records
+- DONE (runtime validation): `BadReadinessProbe` validated in `monitoring` and from Control Panel UI with:
+  - typed-confirmed trigger
+  - fixed-duration execution
+  - deterministic auto-revert to stored original readiness probe
   - revert visibility in execution/audit records
 - NOTE: remaining catalog scenarios are intentionally disabled placeholders for later phases.
 

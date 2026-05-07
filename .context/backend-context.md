@@ -50,14 +50,16 @@ Phase 1 (Chaos Scenario Engine + Audit Foundation) is implemented and validated 
 
 Validated now:
 - `ScaleToZero` trigger flow
+- `ImagePullFailSimulation` trigger/revert flow
+- `BadReadinessProbe` trigger/revert flow
 - Manual revert (single active execution)
 - Revert all active executions
 - Audit trail visibility for actions
 - Max active scenario limit behavior (`CHAOS_MAX_ACTIVE_SCENARIOS`, default 3)
 
 Current execution scope:
-- `ScaleToZero` and `ImagePullFailSimulation` are enabled for Phase 1 execution.
-- `ImagePullFailSimulation` has been validated end-to-end in `monitoring`, including deterministic auto-revert and audit visibility.
+- `ScaleToZero`, `ImagePullFailSimulation`, and `BadReadinessProbe` are enabled for Phase 1 execution.
+- `ImagePullFailSimulation` and `BadReadinessProbe` have been validated end-to-end in `monitoring` (including UI trigger path), with deterministic auto-revert and audit visibility.
 - Other scenarios in the catalog (for example CrashLoop/CPU stress and related entries) remain disabled placeholders for later phases.
 
 ## Local Dev Routing Model (CloudPulse UI)
