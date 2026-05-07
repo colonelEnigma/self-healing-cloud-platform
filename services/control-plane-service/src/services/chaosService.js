@@ -11,6 +11,7 @@ const {
   getServiceDeploymentSummary,
   scaleServiceDeployment,
   patchServiceContainerImage,
+  patchServiceReadinessProbe,
 } = require("./kubernetesService");
 const {
   recordControlPlaneAction,
@@ -268,6 +269,44 @@ const revertExecutionRecord = async ({
       execution: summarizeExecution(revertedExecution),
       mutationResult: {
         type: "patch_container_image",
+        ...patchResult,
+      },
+    };
+  }
+
+  if (scenario.executionType === "patch_readiness_probe") {
+    const originalReadinessProbe = execution.metadata_json?.originalReadinessProbe;
+    const containerName = execution.metadata_json?.containerName;
+
+    if (!originalReadinessProbe || !containerName) {
+      throw new ChaosServiceError(
+        409,
+        "Missing revert metadata for BadReadinessProbe",
+        { executionId: execution.id },
+      );
+    }
+
+    const patchResult = await patchServiceReadinessProbe({
+      service: execution.service,
+      containerName,
+      readinessProbe: originalReadinessProbe,
+    });
+
+    const revertedExecution = await markExecutionReverted({
+      id: execution.id,
+      revertMode,
+      result: "success",
+      metadataJson: {
+        lastRevertAt: new Date().toISOString(),
+        revertedToReadinessProbe: originalReadinessProbe,
+        revertChanged: patchResult.changed,
+      },
+    });
+
+    return {
+      execution: summarizeExecution(revertedExecution),
+      mutationResult: {
+        type: "patch_readiness_probe",
         ...patchResult,
       },
     };
@@ -542,6 +581,89 @@ const triggerScenarioExecution = async ({
         type: "patch_container_image",
         previousImage: patchResult.previousImage,
         requestedImage: patchResult.requestedImage,
+        changed: patchResult.changed,
+      },
+      audit,
+    };
+  }
+
+  if (scenario.executionType === "patch_readiness_probe") {
+    const chaosReadinessProbe = {
+      httpGet: {
+        path: scenario.chaosReadinessPath || "/__chaos__/not-ready",
+        port: scenario.chaosReadinessPort || 65535,
+      },
+      initialDelaySeconds: 0,
+      periodSeconds: 5,
+      timeoutSeconds: 1,
+      failureThreshold: 1,
+    };
+
+    let patchResult;
+    try {
+      patchResult = await patchServiceReadinessProbe({
+        service,
+        containerName: service,
+        readinessProbe: chaosReadinessProbe,
+      });
+    } catch (err) {
+      await auditFailureAndThrow(503, `Failed to apply scenario: ${err.message}`);
+    }
+
+    if (!patchResult.previousReadinessProbe) {
+      await auditFailureAndThrow(409, "Current readiness probe is missing");
+    }
+
+    const startedAt = new Date();
+    const expiresAt = new Date(
+      startedAt.getTime() + resolvedDurationSeconds * 1000,
+    );
+
+    const execution = await createExecution({
+      scenarioId: scenario.id,
+      service,
+      requestedBy: actor?.userEmail || null,
+      reason: reason || null,
+      startedAt: startedAt.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+      metadataJson: {
+        namespace: CONTROL_PLANE_NAMESPACE,
+        containerName: patchResult.containerName,
+        originalReadinessProbe: patchResult.previousReadinessProbe,
+        chaosReadinessProbe: patchResult.requestedReadinessProbe,
+        durationSeconds: resolvedDurationSeconds,
+        triggeredBy: actor?.userEmail || null,
+        triggerSource: "api",
+      },
+    });
+
+    const audit = await writeChaosAudit({
+      actor,
+      action,
+      service,
+      requestedReplicas: null,
+      previousReplicas: null,
+      result: "success",
+      reason: buildAuditReason({
+        scenarioId: scenario.id,
+        message: "triggered",
+        durationSeconds: resolvedDurationSeconds,
+        extra: `chaosReadinessPath=${chaosReadinessProbe.httpGet.path}; chaosReadinessPort=${chaosReadinessProbe.httpGet.port}${reason ? `; reason=${reason}` : ""}`,
+      }),
+    });
+
+    return {
+      scenario: {
+        id: scenario.id,
+        name: scenario.name,
+        category: scenario.category,
+        autoRevert: scenario.autoRevert,
+      },
+      execution: summarizeExecution(execution),
+      mutation: {
+        type: "patch_readiness_probe",
+        previousReadinessProbe: patchResult.previousReadinessProbe,
+        requestedReadinessProbe: patchResult.requestedReadinessProbe,
         changed: patchResult.changed,
       },
       audit,

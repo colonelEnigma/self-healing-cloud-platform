@@ -7,6 +7,7 @@ jest.mock("./kubernetesService", () => ({
   getServiceDeploymentSummary: jest.fn(),
   scaleServiceDeployment: jest.fn(),
   patchServiceContainerImage: jest.fn(),
+  patchServiceReadinessProbe: jest.fn(),
 }));
 
 jest.mock("./auditService", () => ({
@@ -27,6 +28,7 @@ const { isAllowedDeployment } = require("../config/allowlist");
 const {
   getServiceDeploymentSummary,
   patchServiceContainerImage,
+  patchServiceReadinessProbe,
 } = require("./kubernetesService");
 const { recordControlPlaneAction } = require("./auditService");
 const {
@@ -165,5 +167,133 @@ describe("chaosService image patch scenario", () => {
         actor: { userId: 2, userEmail: "admin@example.test" },
       }),
     ).rejects.toBeInstanceOf(ChaosServiceError);
+  });
+});
+
+describe("chaosService readiness probe scenario", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    isAllowedDeployment.mockReturnValue(true);
+    countActiveExecutions.mockResolvedValue(0);
+    findActiveExecutionByService.mockResolvedValue(null);
+    recordControlPlaneAction.mockResolvedValue({ id: 1, created_at: "2026-05-07T00:00:00.000Z" });
+  });
+
+  it("triggers BadReadinessProbe with deterministic readiness metadata", async () => {
+    patchServiceReadinessProbe.mockResolvedValue({
+      containerName: "payment-service",
+      previousReadinessProbe: {
+        httpGet: { path: "/health", port: 4000 },
+        periodSeconds: 5,
+      },
+      requestedReadinessProbe: {
+        httpGet: { path: "/__chaos__/not-ready", port: 65535 },
+        initialDelaySeconds: 0,
+        periodSeconds: 5,
+        timeoutSeconds: 1,
+        failureThreshold: 1,
+      },
+      changed: true,
+    });
+    createExecution.mockResolvedValue({
+      id: 12,
+      scenario_id: "BadReadinessProbe",
+      service: "payment-service",
+      requested_by: "admin@example.test",
+      reason: "probe demo",
+      started_at: "2026-05-07T00:00:00.000Z",
+      expires_at: "2026-05-07T00:03:00.000Z",
+      reverted_at: null,
+      revert_mode: null,
+      status: "active",
+      result: "running",
+      metadata_json: {},
+    });
+
+    const result = await triggerScenarioExecution({
+      scenarioId: "BadReadinessProbe",
+      service: "payment-service",
+      typedServiceConfirmation: "payment-service",
+      typedScenarioConfirmation: "BadReadinessProbe",
+      durationSeconds: 180,
+      reason: "probe demo",
+      actor: { userId: 2, userEmail: "admin@example.test" },
+    });
+
+    expect(patchServiceReadinessProbe).toHaveBeenCalledWith({
+      service: "payment-service",
+      containerName: "payment-service",
+      readinessProbe: {
+        httpGet: { path: "/__chaos__/not-ready", port: 65535 },
+        initialDelaySeconds: 0,
+        periodSeconds: 5,
+        timeoutSeconds: 1,
+        failureThreshold: 1,
+      },
+    });
+    expect(result.mutation.type).toBe("patch_readiness_probe");
+  });
+
+  it("reverts BadReadinessProbe execution using stored probe config", async () => {
+    findExecutionForManualRevert.mockResolvedValue({
+      id: 23,
+      scenario_id: "BadReadinessProbe",
+      service: "payment-service",
+      status: "active",
+      metadata_json: {
+        containerName: "payment-service",
+        originalReadinessProbe: {
+          httpGet: { path: "/health", port: 4000 },
+          periodSeconds: 5,
+        },
+      },
+    });
+    patchServiceReadinessProbe.mockResolvedValue({
+      containerName: "payment-service",
+      previousReadinessProbe: {
+        httpGet: { path: "/__chaos__/not-ready", port: 65535 },
+      },
+      requestedReadinessProbe: {
+        httpGet: { path: "/health", port: 4000 },
+        periodSeconds: 5,
+      },
+      changed: true,
+    });
+    markExecutionReverted.mockResolvedValue({
+      id: 23,
+      scenario_id: "BadReadinessProbe",
+      service: "payment-service",
+      requested_by: "admin@example.test",
+      reason: "probe demo",
+      started_at: "2026-05-07T00:00:00.000Z",
+      expires_at: "2026-05-07T00:03:00.000Z",
+      reverted_at: "2026-05-07T00:01:00.000Z",
+      revert_mode: "manual",
+      status: "reverted",
+      result: "success",
+      metadata_json: {
+        revertedToReadinessProbe: {
+          httpGet: { path: "/health", port: 4000 },
+          periodSeconds: 5,
+        },
+      },
+    });
+
+    const result = await revertScenarioExecution({
+      executionId: 23,
+      actor: { userId: 2, userEmail: "admin@example.test" },
+      revertMode: "manual",
+    });
+
+    expect(patchServiceReadinessProbe).toHaveBeenCalledWith({
+      service: "payment-service",
+      containerName: "payment-service",
+      readinessProbe: {
+        httpGet: { path: "/health", port: 4000 },
+        periodSeconds: 5,
+      },
+    });
+    expect(result.alreadyReverted).toBe(false);
+    expect(result.mutation.type).toBe("patch_readiness_probe");
   });
 });

@@ -76,7 +76,10 @@ const CHAOS_SCENARIOS = Object.freeze([
     maxDurationSeconds: DEFAULT_MAX_DURATION_SECONDS,
     blastRadiusLimit: "single-service",
     autoRevert: true,
-    enabled: false,
+    enabled: true,
+    executionType: "patch_readiness_probe",
+    chaosReadinessPath: "/__chaos__/not-ready",
+    chaosReadinessPort: 65535,
   },
   {
     id: "BadLivenessProbe",
