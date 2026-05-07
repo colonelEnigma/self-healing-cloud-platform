@@ -1,7 +1,7 @@
 # Control Plane Chaos Plan
 
 Last updated: 2026-05-07
-Status: Phase 0 completed; Phase 1 implemented and validated for four executable scenarios
+Status: Phase 0 completed; Phase 1 implemented with ten executable canonical scenarios
 Scope: Admin-triggered chaos scenarios and backend implementation for self-healing + analysis
 
 ## Goal
@@ -36,12 +36,12 @@ Selectable canonical scenarios (max 10):
 - `ImagePullFailSimulation` (enabled)
 - `BadReadinessProbe` (enabled)
 - `BadLivenessProbe` (enabled)
-- `ProbeTimeoutSpike` (disabled placeholder)
-- `LatencyInjection` (disabled placeholder)
-- `ErrorRateSpike` (disabled placeholder)
-- `DatabaseUnavailable` (disabled placeholder)
-- `KafkaUnavailable` (disabled placeholder)
-- `MetricsPipelineDrop` (disabled placeholder)
+- `ProbeTimeoutSpike` (enabled)
+- `LatencyInjection` (enabled)
+- `ErrorRateSpike` (enabled)
+- `DatabaseUnavailable` (enabled)
+- `KafkaUnavailable` (enabled)
+- `MetricsPipelineDrop` (enabled)
 
 Migration note for UI/API clients:
 
@@ -287,7 +287,16 @@ Phase 1 execution status (updated 2026-05-07):
   - control-plane audit entries for trigger/revert success and blocked/error flows
 - DONE (repo tests): controller + AI tests passing, plus chaos-service scenario tests for image patch trigger/revert.
 - DONE (repo tests): readiness-probe scenario tests added for trigger/revert behavior.
-- DONE (execution scope): `ScaleToZero`, `ImagePullFailSimulation`, `BadReadinessProbe`, and `BadLivenessProbe` are executable in Phase 1.
+- DONE (execution scope): all canonical scenarios are executable in Phase 1.
+- DONE (runtime implementation): real infra-level execution for:
+  - `ErrorRateSpike` via deployment env mutation `PORT=18080` (service traffic failure) with exact prior env revert.
+  - `DatabaseUnavailable` via deployment env mutation `DB_HOST=chaos-db-unreachable.invalid` with exact prior env revert.
+  - `KafkaUnavailable` via deployment env mutation `KAFKA_BROKER=chaos-kafka-unreachable.invalid:9092` with exact prior env revert.
+  - `MetricsPipelineDrop` via deployment pod template annotation mutation `prometheus.io/scrape=false` with exact prior annotation-state revert (including previously-absent case).
+- DONE (runtime hardening): dynamic fail-closed prerequisite checks added:
+  - `ErrorRateSpike` blocks when safe live port-mapping prerequisites are not met.
+  - `MetricsPipelineDrop` blocks when annotation-based scrape prerequisites are not met.
+- DONE (RBAC alignment): control-plane Role includes read access to core `services` in `prod` to support prerequisite inspection.
 - DONE (runtime validation): `ImagePullFailSimulation` validated in `monitoring` with:
   - typed-confirmed trigger
   - fixed-duration execution
@@ -303,9 +312,12 @@ Phase 1 execution status (updated 2026-05-07):
   - fixed-duration execution
   - deterministic auto-revert to stored original liveness probe
   - revert visibility in execution/audit records
+- DONE (runtime implementation): `ProbeTimeoutSpike` implemented with deterministic readiness timeout injection (`exec sleep` + low timeout) and revert to stored original readiness probe.
+- DONE (runtime implementation): `LatencyInjection` implemented with deterministic postStart lifecycle sleep injection and revert to stored original lifecycle.
 - DONE (catalog dedup): scenario catalog reduced to canonical template set.
 - NOTE: non-canonical legacy scenario IDs are no longer accepted by trigger/revert-by-scenario flows.
 - DONE (frontend verification): Control Panel UI validated against canonical scenario catalog via the standard `/api/control-plane/* -> http://localhost:18080` path after refreshing the local tunnel/backend image alignment.
+- DONE (frontend validation): all canonical scenarios successfully triggered from frontend against `monitoring` deployment with expected live fault behavior and deterministic revert.
 
 Phase 1 validation commands for `BadLivenessProbe` (run against control-plane API):
 
@@ -321,6 +333,56 @@ Phase 1 validation commands for `BadLivenessProbe` (run against control-plane AP
 
 4. Verify deterministic auto-revert after expiry:
 - `curl "$CONTROL_PLANE_BASE/api/control-plane/demo/scenarios" -H "Authorization: Bearer $ADMIN_JWT"`
+
+Phase 1 validation commands for `ProbeTimeoutSpike` and `LatencyInjection` (run against control-plane API):
+
+1. Verify both scenarios are enabled:
+- `curl "$CONTROL_PLANE_BASE/api/control-plane/demo/scenarios" -H "Authorization: Bearer $ADMIN_JWT"`
+- Expected output: `scenarios[]` includes `ProbeTimeoutSpike` and `LatencyInjection` with `"enabled": true`.
+
+2. Trigger `ProbeTimeoutSpike`:
+- `curl -X POST "$CONTROL_PLANE_BASE/api/control-plane/demo/scenarios/trigger" -H "Content-Type: application/json" -H "Authorization: Bearer $ADMIN_JWT" -d "{\"scenarioId\":\"ProbeTimeoutSpike\",\"service\":\"payment-service\",\"typedServiceConfirmation\":\"payment-service\",\"typedScenarioConfirmation\":\"ProbeTimeoutSpike\",\"durationSeconds\":180,\"reason\":\"phase1-probe-timeout-validation\"}"`
+- Expected output: HTTP `200` with `"scenario":{"id":"ProbeTimeoutSpike"}` and `"mutation":{"type":"patch_readiness_probe",...}`.
+
+3. Trigger `LatencyInjection`:
+- `curl -X POST "$CONTROL_PLANE_BASE/api/control-plane/demo/scenarios/trigger" -H "Content-Type: application/json" -H "Authorization: Bearer $ADMIN_JWT" -d "{\"scenarioId\":\"LatencyInjection\",\"service\":\"order-service\",\"typedServiceConfirmation\":\"order-service\",\"typedScenarioConfirmation\":\"LatencyInjection\",\"durationSeconds\":180,\"reason\":\"phase1-latency-validation\"}"`
+- Expected output: HTTP `200` with `"scenario":{"id":"LatencyInjection"}` and `"mutation":{"type":"patch_container_lifecycle",...}`.
+
+4. Verify deterministic stored originals for revert:
+- `curl "$CONTROL_PLANE_BASE/api/control-plane/demo/scenarios" -H "Authorization: Bearer $ADMIN_JWT"`
+- Expected output: active execution metadata contains `originalReadinessProbe` (ProbeTimeoutSpike) and `originalLifecycle` (LatencyInjection).
+
+5. Verify deterministic auto-revert:
+- `curl "$CONTROL_PLANE_BASE/api/control-plane/demo/scenarios" -H "Authorization: Bearer $ADMIN_JWT"`
+- Expected output after expiry: executions become `status: "reverted"` with `revertMode: "auto"` and `result: "success"`.
+
+Phase 1 validation commands for real infra-level `ErrorRateSpike`, `DatabaseUnavailable`, `KafkaUnavailable`, and `MetricsPipelineDrop`:
+
+1. Trigger `ErrorRateSpike`:
+- `curl -X POST "$CONTROL_PLANE_BASE/api/control-plane/demo/scenarios/trigger" -H "Content-Type: application/json" -H "Authorization: Bearer $ADMIN_JWT" -d "{\"scenarioId\":\"ErrorRateSpike\",\"service\":\"payment-service\",\"typedServiceConfirmation\":\"payment-service\",\"typedScenarioConfirmation\":\"ErrorRateSpike\",\"durationSeconds\":180,\"reason\":\"phase1-error-rate-infra-validation\"}"`
+- Expected output: HTTP `201`; response includes `"scenario":{"id":"ErrorRateSpike"}` and `"mutation":{"type":"patch_container_env_var","envName":"PORT",...}`.
+
+2. Trigger `DatabaseUnavailable`:
+- `curl -X POST "$CONTROL_PLANE_BASE/api/control-plane/demo/scenarios/trigger" -H "Content-Type: application/json" -H "Authorization: Bearer $ADMIN_JWT" -d "{\"scenarioId\":\"DatabaseUnavailable\",\"service\":\"payment-service\",\"typedServiceConfirmation\":\"payment-service\",\"typedScenarioConfirmation\":\"DatabaseUnavailable\",\"durationSeconds\":180,\"reason\":\"phase1-db-unavailable-infra-validation\"}"`
+- Expected output: HTTP `201`; response includes `"scenario":{"id":"DatabaseUnavailable"}` and `"mutation":{"type":"patch_container_env_var","envName":"DB_HOST",...}`.
+
+3. Trigger `KafkaUnavailable`:
+- `curl -X POST "$CONTROL_PLANE_BASE/api/control-plane/demo/scenarios/trigger" -H "Content-Type: application/json" -H "Authorization: Bearer $ADMIN_JWT" -d "{\"scenarioId\":\"KafkaUnavailable\",\"service\":\"order-service\",\"typedServiceConfirmation\":\"order-service\",\"typedScenarioConfirmation\":\"KafkaUnavailable\",\"durationSeconds\":180,\"reason\":\"phase1-kafka-unavailable-infra-validation\"}"`
+- Expected output: HTTP `201`; response includes `"scenario":{"id":"KafkaUnavailable"}` and `"mutation":{"type":"patch_container_env_var","envName":"KAFKA_BROKER",...}`.
+
+4. Trigger `MetricsPipelineDrop`:
+- `curl -X POST "$CONTROL_PLANE_BASE/api/control-plane/demo/scenarios/trigger" -H "Content-Type: application/json" -H "Authorization: Bearer $ADMIN_JWT" -d "{\"scenarioId\":\"MetricsPipelineDrop\",\"service\":\"payment-service\",\"typedServiceConfirmation\":\"payment-service\",\"typedScenarioConfirmation\":\"MetricsPipelineDrop\",\"durationSeconds\":180,\"reason\":\"phase1-metrics-drop-infra-validation\"}"`
+- Expected output: HTTP `201`; response includes `"scenario":{"id":"MetricsPipelineDrop"}` and `"mutation":{"type":"patch_pod_template_annotation","annotationName":"prometheus.io/scrape",...}`.
+
+5. Verify deterministic metadata for exact revert:
+- `curl "$CONTROL_PLANE_BASE/api/control-plane/demo/scenarios" -H "Authorization: Bearer $ADMIN_JWT"`
+- Expected output:
+  - env scenarios record `metadata.originalEnvEntry` (including `null` when previously absent).
+  - metrics scenario records `metadata.hadOriginalAnnotation` and `metadata.originalAnnotationValue`.
+
+6. Verify auto-revert completion:
+- `curl "$CONTROL_PLANE_BASE/api/control-plane/demo/scenarios" -H "Authorization: Bearer $ADMIN_JWT"`
+- Expected output after expiry + scheduler poll: executions move to `status: "reverted"` with `revertMode: "auto"`, and metadata includes `revertedToEnvEntry` or `revertedToAnnotationValue` as applicable.
 
 ### Phase 2: Incident Timeline + Log Analyzer (Deterministic)
 

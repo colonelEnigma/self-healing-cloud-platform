@@ -239,6 +239,53 @@ const getServiceDeploymentSummary = async (service) => {
   return mapDeploymentToSummary(deploymentResponse.body, pods);
 };
 
+const getServiceChaosPrerequisites = async (service) => {
+  const { appsApi, coreApi } = getKubernetesClients();
+  const [deploymentResponse, serviceResponse] = await Promise.all([
+    appsApi.readNamespacedDeployment(service, CONTROL_PLANE_NAMESPACE),
+    coreApi.readNamespacedService(service, CONTROL_PLANE_NAMESPACE),
+  ]);
+
+  const deployment = deploymentResponse.body;
+  const serviceResource = serviceResponse.body;
+  const containers = deployment?.spec?.template?.spec?.containers || [];
+  const container =
+    containers.find((c) => c.name === service) ||
+    containers[0] ||
+    null;
+  const env = Array.isArray(container?.env) ? container.env : [];
+  const portEnvEntry = env.find((entry) => entry.name === "PORT") || null;
+  const containerPorts = Array.isArray(container?.ports) ? container.ports : [];
+  const servicePorts = Array.isArray(serviceResource?.spec?.ports)
+    ? serviceResource.spec.ports
+    : [];
+  const podAnnotations =
+    deployment?.spec?.template?.metadata?.annotations || {};
+  const serviceAnnotations = serviceResource?.metadata?.annotations || {};
+
+  return {
+    service,
+    containerName: container?.name || null,
+    portEnvEntry,
+    containerPorts: containerPorts.map((item) => ({
+      name: item?.name || null,
+      containerPort: Number.isInteger(item?.containerPort)
+        ? item.containerPort
+        : null,
+    })),
+    servicePorts: servicePorts.map((item) => ({
+      name: item?.name || null,
+      port: Number.isInteger(item?.port) ? item.port : null,
+      targetPort:
+        Number.isInteger(item?.targetPort) || typeof item?.targetPort === "string"
+          ? item.targetPort
+          : null,
+    })),
+    podAnnotations,
+    serviceAnnotations,
+  };
+};
+
 const listReplicaSetsByService = async (service) => {
   const { appsApi } = getKubernetesClients();
   const response = await appsApi.listNamespacedReplicaSet(
@@ -588,10 +635,183 @@ const patchServiceLivenessProbe = async ({
   };
 };
 
+const patchServiceContainerLifecycle = async ({
+  service,
+  containerName,
+  lifecycle,
+}) => {
+  const { appsApi } = getKubernetesClients();
+  const deployment = await appsApi.readNamespacedDeployment(
+    service,
+    CONTROL_PLANE_NAMESPACE,
+  );
+
+  const containers = deployment.body?.spec?.template?.spec?.containers || [];
+  const container =
+    containers.find((c) => c.name === containerName) ||
+    containers.find((c) => c.name === service) ||
+    containers[0];
+
+  if (!container || !container.name) {
+    throw new Error(`Container ${containerName || "auto"} not found in deployment ${service}`);
+  }
+
+  await appsApi.patchNamespacedDeployment(
+    service,
+    CONTROL_PLANE_NAMESPACE,
+    {
+      spec: {
+        template: {
+          spec: {
+            containers: [{ name: container.name, lifecycle }],
+          },
+        },
+      },
+    },
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    strategicMergePatchOptions,
+  );
+
+  return {
+    containerName: container.name,
+    previousLifecycle: container.lifecycle || null,
+    requestedLifecycle: lifecycle || null,
+    changed:
+      JSON.stringify(container.lifecycle || null) !==
+      JSON.stringify(lifecycle || null),
+  };
+};
+
+const patchServiceContainerEnvVar = async ({
+  service,
+  containerName,
+  envName,
+  envValue,
+}) => {
+  const { appsApi } = getKubernetesClients();
+  const deployment = await appsApi.readNamespacedDeployment(
+    service,
+    CONTROL_PLANE_NAMESPACE,
+  );
+
+  const containers = deployment.body?.spec?.template?.spec?.containers || [];
+  const container =
+    containers.find((c) => c.name === containerName) ||
+    containers.find((c) => c.name === service) ||
+    containers[0];
+
+  if (!container || !container.name) {
+    throw new Error(`Container ${containerName || "auto"} not found in deployment ${service}`);
+  }
+
+  const currentEnv = Array.isArray(container.env) ? container.env : [];
+  const existingEntry = currentEnv.find((entry) => entry.name === envName) || null;
+  const nextEnvBase = currentEnv.filter((entry) => entry.name !== envName);
+  const shouldSetValue = envValue != null;
+  const nextEnv = shouldSetValue
+    ? nextEnvBase.concat([{ name: envName, value: envValue }])
+    : nextEnvBase;
+
+  await appsApi.patchNamespacedDeployment(
+    service,
+    CONTROL_PLANE_NAMESPACE,
+    {
+      spec: {
+        template: {
+          spec: {
+            containers: [{ name: container.name, env: nextEnv }],
+          },
+        },
+      },
+    },
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    strategicMergePatchOptions,
+  );
+
+  return {
+    containerName: container.name,
+    envName,
+    previousEnvEntry: existingEntry,
+    requestedEnvEntry: shouldSetValue ? { name: envName, value: envValue } : null,
+    changed:
+      JSON.stringify(existingEntry || null) !==
+      JSON.stringify(shouldSetValue ? { name: envName, value: envValue } : null),
+  };
+};
+
+const patchServicePodTemplateAnnotation = async ({
+  service,
+  annotationName,
+  annotationValue,
+}) => {
+  const { appsApi } = getKubernetesClients();
+  const deployment = await appsApi.readNamespacedDeployment(
+    service,
+    CONTROL_PLANE_NAMESPACE,
+  );
+
+  const currentAnnotations =
+    deployment.body?.spec?.template?.metadata?.annotations || {};
+  const hadPreviousAnnotation = Object.prototype.hasOwnProperty.call(
+    currentAnnotations,
+    annotationName,
+  );
+  const previousAnnotationValue = hadPreviousAnnotation
+    ? currentAnnotations[annotationName]
+    : null;
+
+  const nextAnnotations = { ...currentAnnotations };
+  if (annotationValue == null) {
+    delete nextAnnotations[annotationName];
+  } else {
+    nextAnnotations[annotationName] = String(annotationValue);
+  }
+
+  await appsApi.patchNamespacedDeployment(
+    service,
+    CONTROL_PLANE_NAMESPACE,
+    {
+      spec: {
+        template: {
+          metadata: {
+            annotations: nextAnnotations,
+          },
+        },
+      },
+    },
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    strategicMergePatchOptions,
+  );
+
+  return {
+    annotationName,
+    hadPreviousAnnotation,
+    previousAnnotationValue,
+    requestedAnnotationValue:
+      annotationValue == null ? null : String(annotationValue),
+    changed:
+      (previousAnnotationValue ?? null) !==
+      (annotationValue == null ? null : String(annotationValue)),
+  };
+};
+
 module.exports = {
   getKubernetesClients,
   getAllowlistedDeploymentSummaries,
   getServiceDeploymentSummary,
+  getServiceChaosPrerequisites,
   listReplicaSetsByService,
   getServiceEvents,
   getServiceLogs,
@@ -599,4 +819,7 @@ module.exports = {
   patchServiceContainerImage,
   patchServiceReadinessProbe,
   patchServiceLivenessProbe,
+  patchServiceContainerLifecycle,
+  patchServiceContainerEnvVar,
+  patchServicePodTemplateAnnotation,
 };

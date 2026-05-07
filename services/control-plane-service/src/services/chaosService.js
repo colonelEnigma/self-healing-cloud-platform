@@ -10,10 +10,14 @@ const {
 } = require("../config/chaosScenarios");
 const {
   getServiceDeploymentSummary,
+  getServiceChaosPrerequisites,
   scaleServiceDeployment,
   patchServiceContainerImage,
   patchServiceReadinessProbe,
   patchServiceLivenessProbe,
+  patchServiceContainerLifecycle,
+  patchServiceContainerEnvVar,
+  patchServicePodTemplateAnnotation,
 } = require("./kubernetesService");
 const {
   recordControlPlaneAction,
@@ -167,6 +171,84 @@ const summarizeExecution = (execution) => {
   };
 };
 
+const toIntegerIfPossible = (value) => {
+  if (Number.isInteger(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isNaN(parsed)) {
+      return parsed;
+    }
+  }
+  return null;
+};
+
+const validateErrorRateSpikePrerequisites = ({
+  service,
+  prerequisites,
+  chaosPort,
+}) => {
+  const reasons = [];
+  const portEnvValue = prerequisites?.portEnvEntry?.value;
+  const currentPort = toIntegerIfPossible(portEnvValue);
+  if (!Number.isInteger(currentPort)) {
+    reasons.push("PORT env is missing or non-numeric");
+  }
+
+  const targetPorts = (prerequisites?.servicePorts || [])
+    .map((item) => toIntegerIfPossible(item?.targetPort))
+    .filter((item) => Number.isInteger(item));
+  if (targetPorts.length === 0) {
+    reasons.push("service targetPort is not a fixed numeric port");
+  }
+
+  if (targetPorts.includes(chaosPort)) {
+    reasons.push("service targetPort already equals chaos PORT value");
+  }
+
+  if (Number.isInteger(currentPort) && !targetPorts.includes(currentPort)) {
+    reasons.push("service targetPort does not match current PORT");
+  }
+
+  if (reasons.length > 0) {
+    throw new ChaosServiceError(
+      409,
+      "ErrorRateSpike prerequisites not met",
+      {
+        service,
+        reasons,
+      },
+    );
+  }
+};
+
+const validateMetricsPipelineDropPrerequisites = ({
+  service,
+  prerequisites,
+  annotationName,
+}) => {
+  const podAnnotationValue = prerequisites?.podAnnotations?.[annotationName];
+  const serviceAnnotationValue =
+    prerequisites?.serviceAnnotations?.[annotationName];
+  const hasPrometheusScrapeSignal =
+    String(podAnnotationValue || "").toLowerCase() === "true" ||
+    String(serviceAnnotationValue || "").toLowerCase() === "true";
+
+  if (!hasPrometheusScrapeSignal) {
+    throw new ChaosServiceError(
+      409,
+      "MetricsPipelineDrop prerequisites not met",
+      {
+        service,
+        reasons: [
+          `${annotationName}=true not detected on pod template or service`,
+        ],
+      },
+    );
+  }
+};
+
 const getScenarioCatalog = async () => {
   const activeExecutions = await listActiveExecutions({ limit: 500 });
   const activeByScenario = activeExecutions.reduce((acc, execution) => {
@@ -212,124 +294,102 @@ const revertExecutionRecord = async ({
   if (scenario.executionType === "scale_replicas") {
     const previousReplicas = execution.metadata_json?.previousReplicas;
     ensureSafeReplicaValue(previousReplicas, "previousReplicas");
-
-    const scaleResult = await scaleServiceDeployment({
-      service: execution.service,
-      replicas: previousReplicas,
-    });
-
+    const scaleResult = await scaleServiceDeployment({ service: execution.service, replicas: previousReplicas });
     const revertedExecution = await markExecutionReverted({
       id: execution.id,
       revertMode,
       result: "success",
-      metadataJson: {
-        lastRevertAt: new Date().toISOString(),
-        revertedToReplicas: previousReplicas,
-        revertChanged: scaleResult.changed,
-      },
+      metadataJson: { lastRevertAt: new Date().toISOString(), revertedToReplicas: previousReplicas, revertChanged: scaleResult.changed },
     });
-
-    return {
-      execution: summarizeExecution(revertedExecution),
-      mutationResult: {
-        type: "scale_replicas",
-        ...scaleResult,
-      },
-    };
+    return { execution: summarizeExecution(revertedExecution), mutationResult: { type: "scale_replicas", ...scaleResult } };
   }
 
   if (scenario.executionType === "patch_container_image") {
     const originalImage = execution.metadata_json?.originalImage;
     const containerName = execution.metadata_json?.containerName;
-
     if (!originalImage || !containerName) {
-      throw new ChaosServiceError(
-        409,
-        "Missing revert metadata for ImagePullFailSimulation",
-        { executionId: execution.id },
-      );
+      throw new ChaosServiceError(409, "Missing revert metadata for ImagePullFailSimulation", { executionId: execution.id });
     }
-
-    const patchResult = await patchServiceContainerImage({
-      service: execution.service,
-      containerName,
-      image: originalImage,
-    });
-
+    const patchResult = await patchServiceContainerImage({ service: execution.service, containerName, image: originalImage });
     const revertedExecution = await markExecutionReverted({
       id: execution.id,
       revertMode,
       result: "success",
-      metadataJson: {
-        lastRevertAt: new Date().toISOString(),
-        revertedToImage: originalImage,
-        revertChanged: patchResult.changed,
-      },
+      metadataJson: { lastRevertAt: new Date().toISOString(), revertedToImage: originalImage, revertChanged: patchResult.changed },
     });
-
-    return {
-      execution: summarizeExecution(revertedExecution),
-      mutationResult: {
-        type: "patch_container_image",
-        ...patchResult,
-      },
-    };
+    return { execution: summarizeExecution(revertedExecution), mutationResult: { type: "patch_container_image", ...patchResult } };
   }
 
-  if (scenario.executionType === "patch_readiness_probe") {
+  if (scenario.executionType === "patch_readiness_probe" || scenario.executionType === "patch_readiness_probe_timeout") {
     const originalReadinessProbe = execution.metadata_json?.originalReadinessProbe;
     const containerName = execution.metadata_json?.containerName;
-
     if (!originalReadinessProbe || !containerName) {
-      throw new ChaosServiceError(
-        409,
-        "Missing revert metadata for BadReadinessProbe",
-        { executionId: execution.id },
-      );
+      throw new ChaosServiceError(409, `Missing revert metadata for ${execution.scenario_id}`, { executionId: execution.id });
     }
-
-    const patchResult = await patchServiceReadinessProbe({
-      service: execution.service,
-      containerName,
-      readinessProbe: originalReadinessProbe,
-    });
-
+    const patchResult = await patchServiceReadinessProbe({ service: execution.service, containerName, readinessProbe: originalReadinessProbe });
     const revertedExecution = await markExecutionReverted({
       id: execution.id,
       revertMode,
       result: "success",
-      metadataJson: {
-        lastRevertAt: new Date().toISOString(),
-        revertedToReadinessProbe: originalReadinessProbe,
-        revertChanged: patchResult.changed,
-      },
+      metadataJson: { lastRevertAt: new Date().toISOString(), revertedToReadinessProbe: originalReadinessProbe, revertChanged: patchResult.changed },
     });
-
-    return {
-      execution: summarizeExecution(revertedExecution),
-      mutationResult: {
-        type: "patch_readiness_probe",
-        ...patchResult,
-      },
-    };
+    return { execution: summarizeExecution(revertedExecution), mutationResult: { type: "patch_readiness_probe", ...patchResult } };
   }
 
   if (scenario.executionType === "patch_liveness_probe") {
     const originalLivenessProbe = execution.metadata_json?.originalLivenessProbe;
     const containerName = execution.metadata_json?.containerName;
-
     if (!originalLivenessProbe || !containerName) {
+      throw new ChaosServiceError(409, "Missing revert metadata for BadLivenessProbe", { executionId: execution.id });
+    }
+    const patchResult = await patchServiceLivenessProbe({ service: execution.service, containerName, livenessProbe: originalLivenessProbe });
+    const revertedExecution = await markExecutionReverted({
+      id: execution.id,
+      revertMode,
+      result: "success",
+      metadataJson: { lastRevertAt: new Date().toISOString(), revertedToLivenessProbe: originalLivenessProbe, revertChanged: patchResult.changed },
+    });
+    return { execution: summarizeExecution(revertedExecution), mutationResult: { type: "patch_liveness_probe", ...patchResult } };
+  }
+
+  if (scenario.executionType === "patch_container_lifecycle_post_start_sleep") {
+    const originalLifecycle = execution.metadata_json?.originalLifecycle;
+    const containerName = execution.metadata_json?.containerName;
+    if (!containerName) {
+      throw new ChaosServiceError(409, "Missing revert metadata for LatencyInjection", { executionId: execution.id });
+    }
+    const patchResult = await patchServiceContainerLifecycle({
+      service: execution.service,
+      containerName,
+      lifecycle: originalLifecycle || null,
+    });
+    const revertedExecution = await markExecutionReverted({
+      id: execution.id,
+      revertMode,
+      result: "success",
+      metadataJson: { lastRevertAt: new Date().toISOString(), revertedToLifecycle: originalLifecycle || null, revertChanged: patchResult.changed },
+    });
+    return { execution: summarizeExecution(revertedExecution), mutationResult: { type: "patch_container_lifecycle", ...patchResult } };
+  }
+
+  if (scenario.executionType === "patch_container_env_var") {
+    const containerName = execution.metadata_json?.containerName;
+    const chaosEnvVarName = execution.metadata_json?.chaosEnvVarName;
+    const originalEnvEntry = execution.metadata_json?.originalEnvEntry || null;
+
+    if (!containerName || !chaosEnvVarName) {
       throw new ChaosServiceError(
         409,
-        "Missing revert metadata for BadLivenessProbe",
+        "Missing revert metadata for env-var scenario",
         { executionId: execution.id },
       );
     }
 
-    const patchResult = await patchServiceLivenessProbe({
+    const patchResult = await patchServiceContainerEnvVar({
       service: execution.service,
       containerName,
-      livenessProbe: originalLivenessProbe,
+      envName: chaosEnvVarName,
+      envValue: originalEnvEntry?.value ?? null,
     });
 
     const revertedExecution = await markExecutionReverted({
@@ -338,7 +398,8 @@ const revertExecutionRecord = async ({
       result: "success",
       metadataJson: {
         lastRevertAt: new Date().toISOString(),
-        revertedToLivenessProbe: originalLivenessProbe,
+        revertedEnvVarName: chaosEnvVarName,
+        revertedToEnvEntry: originalEnvEntry,
         revertChanged: patchResult.changed,
       },
     });
@@ -346,20 +407,61 @@ const revertExecutionRecord = async ({
     return {
       execution: summarizeExecution(revertedExecution),
       mutationResult: {
-        type: "patch_liveness_probe",
+        type: "patch_container_env_var",
         ...patchResult,
       },
     };
   }
 
-  throw new ChaosServiceError(
-    400,
-    `Scenario ${execution.scenario_id} is not revert-enabled in Phase 1`,
-    {
-      executionId: execution.id,
-      scenarioId: execution.scenario_id,
-    },
-  );
+  if (scenario.executionType === "patch_pod_template_annotation") {
+    const annotationName = execution.metadata_json?.chaosAnnotationName;
+    const originalAnnotationValue =
+      execution.metadata_json?.originalAnnotationValue ?? null;
+    const hadOriginalAnnotation = Boolean(
+      execution.metadata_json?.hadOriginalAnnotation,
+    );
+
+    if (!annotationName) {
+      throw new ChaosServiceError(
+        409,
+        "Missing revert metadata for annotation scenario",
+        { executionId: execution.id },
+      );
+    }
+
+    const patchResult = await patchServicePodTemplateAnnotation({
+      service: execution.service,
+      annotationName,
+      annotationValue: hadOriginalAnnotation ? originalAnnotationValue : null,
+    });
+
+    const revertedExecution = await markExecutionReverted({
+      id: execution.id,
+      revertMode,
+      result: "success",
+      metadataJson: {
+        lastRevertAt: new Date().toISOString(),
+        revertedAnnotationName: annotationName,
+        revertedToAnnotationValue: hadOriginalAnnotation
+          ? originalAnnotationValue
+          : null,
+        revertChanged: patchResult.changed,
+      },
+    });
+
+    return {
+      execution: summarizeExecution(revertedExecution),
+      mutationResult: {
+        type: "patch_pod_template_annotation",
+        ...patchResult,
+      },
+    };
+  }
+
+  throw new ChaosServiceError(400, `Scenario ${execution.scenario_id} is not revert-enabled in Phase 1`, {
+    executionId: execution.id,
+    scenarioId: execution.scenario_id,
+  });
 };
 
 const triggerScenarioExecution = async ({
@@ -801,10 +903,341 @@ const triggerScenarioExecution = async ({
     };
   }
 
-  await auditFailureAndThrow(
-    400,
-    `Scenario ${scenario.id} is not executable in Phase 1`,
-  );
+  if (scenario.executionType === "patch_readiness_probe_timeout") {
+    const chaosProbeTimeoutSeconds = Number.isInteger(scenario.chaosProbeTimeoutSeconds)
+      ? scenario.chaosProbeTimeoutSeconds
+      : 1;
+    const chaosProbeExecSleepSeconds = Number.isInteger(scenario.chaosProbeExecSleepSeconds)
+      ? scenario.chaosProbeExecSleepSeconds
+      : 5;
+    const chaosReadinessProbe = {
+      exec: {
+        command: ["sh", "-c", `sleep ${chaosProbeExecSleepSeconds}`],
+      },
+      initialDelaySeconds: 0,
+      periodSeconds: 5,
+      timeoutSeconds: chaosProbeTimeoutSeconds,
+      failureThreshold: 1,
+      successThreshold: 1,
+    };
+
+    let patchResult;
+    try {
+      patchResult = await patchServiceReadinessProbe({
+        service,
+        containerName: service,
+        readinessProbe: chaosReadinessProbe,
+      });
+    } catch (err) {
+      await auditFailureAndThrow(503, `Failed to apply scenario: ${err.message}`);
+    }
+
+    if (!patchResult.previousReadinessProbe) {
+      await auditFailureAndThrow(409, "Current readiness probe is missing");
+    }
+
+    const startedAt = new Date();
+    const expiresAt = new Date(startedAt.getTime() + resolvedDurationSeconds * 1000);
+    const execution = await createExecution({
+      scenarioId: scenario.id,
+      service,
+      requestedBy: actor?.userEmail || null,
+      reason: reason || null,
+      startedAt: startedAt.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+      metadataJson: {
+        namespace: CONTROL_PLANE_NAMESPACE,
+        containerName: patchResult.containerName,
+        originalReadinessProbe: patchResult.previousReadinessProbe,
+        chaosReadinessProbe: patchResult.requestedReadinessProbe,
+        durationSeconds: resolvedDurationSeconds,
+        triggeredBy: actor?.userEmail || null,
+        triggerSource: "api",
+      },
+    });
+    const audit = await writeChaosAudit({
+      actor,
+      action,
+      service,
+      requestedReplicas: null,
+      previousReplicas: null,
+      result: "success",
+      reason: buildAuditReason({
+        scenarioId: scenario.id,
+        message: "triggered",
+        durationSeconds: resolvedDurationSeconds,
+        extra: `probeTimeoutSeconds=${chaosProbeTimeoutSeconds}; probeExecSleepSeconds=${chaosProbeExecSleepSeconds}${reason ? `; reason=${reason}` : ""}`,
+      }),
+    });
+    return {
+      scenario: { id: scenario.id, name: scenario.name, category: scenario.category, autoRevert: scenario.autoRevert },
+      execution: summarizeExecution(execution),
+      mutation: {
+        type: "patch_readiness_probe",
+        previousReadinessProbe: patchResult.previousReadinessProbe,
+        requestedReadinessProbe: patchResult.requestedReadinessProbe,
+        changed: patchResult.changed,
+      },
+      audit,
+    };
+  }
+
+  if (scenario.executionType === "patch_container_lifecycle_post_start_sleep") {
+    const chaosPostStartSleepSeconds = Number.isInteger(scenario.chaosPostStartSleepSeconds)
+      ? scenario.chaosPostStartSleepSeconds
+      : 12;
+    const chaosLifecycle = {
+      postStart: {
+        exec: {
+          command: ["sh", "-c", `sleep ${chaosPostStartSleepSeconds}`],
+        },
+      },
+    };
+    let patchResult;
+    try {
+      patchResult = await patchServiceContainerLifecycle({
+        service,
+        containerName: service,
+        lifecycle: chaosLifecycle,
+      });
+    } catch (err) {
+      await auditFailureAndThrow(503, `Failed to apply scenario: ${err.message}`);
+    }
+    const startedAt = new Date();
+    const expiresAt = new Date(startedAt.getTime() + resolvedDurationSeconds * 1000);
+    const execution = await createExecution({
+      scenarioId: scenario.id,
+      service,
+      requestedBy: actor?.userEmail || null,
+      reason: reason || null,
+      startedAt: startedAt.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+      metadataJson: {
+        namespace: CONTROL_PLANE_NAMESPACE,
+        containerName: patchResult.containerName,
+        originalLifecycle: patchResult.previousLifecycle,
+        chaosLifecycle: patchResult.requestedLifecycle,
+        durationSeconds: resolvedDurationSeconds,
+        triggeredBy: actor?.userEmail || null,
+        triggerSource: "api",
+      },
+    });
+    const audit = await writeChaosAudit({
+      actor,
+      action,
+      service,
+      requestedReplicas: null,
+      previousReplicas: null,
+      result: "success",
+      reason: buildAuditReason({
+        scenarioId: scenario.id,
+        message: "triggered",
+        durationSeconds: resolvedDurationSeconds,
+        extra: `postStartSleepSeconds=${chaosPostStartSleepSeconds}${reason ? `; reason=${reason}` : ""}`,
+      }),
+    });
+    return {
+      scenario: { id: scenario.id, name: scenario.name, category: scenario.category, autoRevert: scenario.autoRevert },
+      execution: summarizeExecution(execution),
+      mutation: {
+        type: "patch_container_lifecycle",
+        previousLifecycle: patchResult.previousLifecycle,
+        requestedLifecycle: patchResult.requestedLifecycle,
+        changed: patchResult.changed,
+      },
+      audit,
+    };
+  }
+
+  if (scenario.executionType === "patch_container_env_var") {
+    const chaosEnvVarName = scenario.chaosEnvVarName;
+    const chaosEnvVarValue = String(scenario.chaosEnvVarValue ?? "");
+    if (!chaosEnvVarName) {
+      await auditFailureAndThrow(500, "Scenario env var configuration missing");
+    }
+
+    if (scenario.id === "ErrorRateSpike") {
+      let prerequisites;
+      try {
+        prerequisites = await getServiceChaosPrerequisites(service);
+      } catch (err) {
+        await auditFailureAndThrow(
+          503,
+          `Failed to read scenario prerequisites: ${err.message}`,
+        );
+      }
+
+      try {
+        validateErrorRateSpikePrerequisites({
+          service,
+          prerequisites,
+          chaosPort: toIntegerIfPossible(chaosEnvVarValue),
+        });
+      } catch (err) {
+        if (err instanceof ChaosServiceError) {
+          await auditFailureAndThrow(err.statusCode, err.message, {
+            extra: (err.details?.reasons || []).join(", "),
+          });
+        }
+        throw err;
+      }
+    }
+
+    let patchResult;
+    try {
+      patchResult = await patchServiceContainerEnvVar({
+        service,
+        containerName: service,
+        envName: chaosEnvVarName,
+        envValue: chaosEnvVarValue,
+      });
+    } catch (err) {
+      await auditFailureAndThrow(503, `Failed to apply scenario: ${err.message}`);
+    }
+
+    const startedAt = new Date();
+    const expiresAt = new Date(startedAt.getTime() + resolvedDurationSeconds * 1000);
+    const execution = await createExecution({
+      scenarioId: scenario.id,
+      service,
+      requestedBy: actor?.userEmail || null,
+      reason: reason || null,
+      startedAt: startedAt.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+      metadataJson: {
+        namespace: CONTROL_PLANE_NAMESPACE,
+        containerName: patchResult.containerName,
+        chaosEnvVarName,
+        originalEnvEntry: patchResult.previousEnvEntry,
+        chaosEnvEntry: patchResult.requestedEnvEntry,
+        durationSeconds: resolvedDurationSeconds,
+        triggeredBy: actor?.userEmail || null,
+        triggerSource: "api",
+      },
+    });
+    const audit = await writeChaosAudit({
+      actor,
+      action,
+      service,
+      requestedReplicas: null,
+      previousReplicas: null,
+      result: "success",
+      reason: buildAuditReason({
+        scenarioId: scenario.id,
+        message: "triggered",
+        durationSeconds: resolvedDurationSeconds,
+        extra: `chaosEnvVar=${chaosEnvVarName}; chaosEnvValue=${chaosEnvVarValue}${reason ? `; reason=${reason}` : ""}`,
+      }),
+    });
+    return {
+      scenario: { id: scenario.id, name: scenario.name, category: scenario.category, autoRevert: scenario.autoRevert },
+      execution: summarizeExecution(execution),
+      mutation: {
+        type: "patch_container_env_var",
+        envName: patchResult.envName,
+        previousEnvEntry: patchResult.previousEnvEntry,
+        requestedEnvEntry: patchResult.requestedEnvEntry,
+        changed: patchResult.changed,
+      },
+      audit,
+    };
+  }
+
+  if (scenario.executionType === "patch_pod_template_annotation") {
+    const chaosAnnotationName = scenario.chaosAnnotationName;
+    const chaosAnnotationValue = String(scenario.chaosAnnotationValue ?? "");
+    if (!chaosAnnotationName) {
+      await auditFailureAndThrow(500, "Scenario annotation configuration missing");
+    }
+
+    if (scenario.id === "MetricsPipelineDrop") {
+      let prerequisites;
+      try {
+        prerequisites = await getServiceChaosPrerequisites(service);
+      } catch (err) {
+        await auditFailureAndThrow(
+          503,
+          `Failed to read scenario prerequisites: ${err.message}`,
+        );
+      }
+
+      try {
+        validateMetricsPipelineDropPrerequisites({
+          service,
+          prerequisites,
+          annotationName: chaosAnnotationName,
+        });
+      } catch (err) {
+        if (err instanceof ChaosServiceError) {
+          await auditFailureAndThrow(err.statusCode, err.message, {
+            extra: (err.details?.reasons || []).join(", "),
+          });
+        }
+        throw err;
+      }
+    }
+
+    let patchResult;
+    try {
+      patchResult = await patchServicePodTemplateAnnotation({
+        service,
+        annotationName: chaosAnnotationName,
+        annotationValue: chaosAnnotationValue,
+      });
+    } catch (err) {
+      await auditFailureAndThrow(503, `Failed to apply scenario: ${err.message}`);
+    }
+
+    const startedAt = new Date();
+    const expiresAt = new Date(startedAt.getTime() + resolvedDurationSeconds * 1000);
+    const execution = await createExecution({
+      scenarioId: scenario.id,
+      service,
+      requestedBy: actor?.userEmail || null,
+      reason: reason || null,
+      startedAt: startedAt.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+      metadataJson: {
+        namespace: CONTROL_PLANE_NAMESPACE,
+        chaosAnnotationName,
+        hadOriginalAnnotation: patchResult.hadPreviousAnnotation,
+        originalAnnotationValue: patchResult.previousAnnotationValue,
+        chaosAnnotationValue: patchResult.requestedAnnotationValue,
+        durationSeconds: resolvedDurationSeconds,
+        triggeredBy: actor?.userEmail || null,
+        triggerSource: "api",
+      },
+    });
+    const audit = await writeChaosAudit({
+      actor,
+      action,
+      service,
+      requestedReplicas: null,
+      previousReplicas: null,
+      result: "success",
+      reason: buildAuditReason({
+        scenarioId: scenario.id,
+        message: "triggered",
+        durationSeconds: resolvedDurationSeconds,
+        extra: `chaosAnnotation=${chaosAnnotationName}; chaosAnnotationValue=${chaosAnnotationValue}${reason ? `; reason=${reason}` : ""}`,
+      }),
+    });
+    return {
+      scenario: { id: scenario.id, name: scenario.name, category: scenario.category, autoRevert: scenario.autoRevert },
+      execution: summarizeExecution(execution),
+      mutation: {
+        type: "patch_pod_template_annotation",
+        annotationName: patchResult.annotationName,
+        hadPreviousAnnotation: patchResult.hadPreviousAnnotation,
+        previousAnnotationValue: patchResult.previousAnnotationValue,
+        requestedAnnotationValue: patchResult.requestedAnnotationValue,
+        changed: patchResult.changed,
+      },
+      audit,
+    };
+  }
+
+  await auditFailureAndThrow(400, `Scenario ${scenario.id} is not executable in Phase 1`);
 };
 
 const revertScenarioExecution = async ({
