@@ -441,6 +441,51 @@ const scaleServiceDeployment = async ({ service, replicas }) => {
   };
 };
 
+const patchServiceContainerImage = async ({ service, containerName, image }) => {
+  const { appsApi } = getKubernetesClients();
+  const deployment = await appsApi.readNamespacedDeployment(
+    service,
+    CONTROL_PLANE_NAMESPACE,
+  );
+
+  const containers = deployment.body?.spec?.template?.spec?.containers || [];
+  const container =
+    containers.find((c) => c.name === containerName) ||
+    containers.find((c) => c.name === service) ||
+    containers[0];
+
+  if (!container || !container.name) {
+    throw new Error(`Container ${containerName || "auto"} not found in deployment ${service}`);
+  }
+
+  await appsApi.patchNamespacedDeployment(
+    service,
+    CONTROL_PLANE_NAMESPACE,
+    { 
+      spec: { 
+        template: { 
+          spec: { 
+            containers: [{ name: container.name, image }],
+          } 
+        } 
+      } 
+    },
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    strategicMergePatchOptions,
+  );
+
+  return {
+    containerName: container.name,
+    previousImage: container.image || null,
+    requestedImage: image,
+    changed: container.image !== image,
+  };
+};
+
 module.exports = {
   getKubernetesClients,
   getAllowlistedDeploymentSummaries,
@@ -449,4 +494,5 @@ module.exports = {
   getServiceEvents,
   getServiceLogs,
   scaleServiceDeployment,
+  patchServiceContainerImage,
 };

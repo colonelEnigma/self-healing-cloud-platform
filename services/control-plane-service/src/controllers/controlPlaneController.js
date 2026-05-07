@@ -687,7 +687,8 @@ const postTriggerChaosScenario = async (req, res) => {
       message: "Chaos scenario triggered",
       scenario: result.scenario,
       execution: result.execution,
-      scale: result.scale,
+      mutation: result.mutation || result.scale || null,
+      scale: result.scale || null,
       auditId: result.audit?.id || null,
       auditedAt: result.audit?.created_at || null,
     });
@@ -733,6 +734,7 @@ const postRevertChaosScenario = async (req, res) => {
         : "Scenario execution reverted",
       alreadyReverted: result.alreadyReverted,
       execution: result.execution,
+      mutation: result.mutation || result.scale || null,
       scale: result.scale || null,
       auditId: result.audit?.id || null,
       auditedAt: result.audit?.created_at || null,

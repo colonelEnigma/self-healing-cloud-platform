@@ -10,6 +10,7 @@ const {
 const {
   getServiceDeploymentSummary,
   scaleServiceDeployment,
+  patchServiceContainerImage,
 } = require("./kubernetesService");
 const {
   recordControlPlaneAction,
@@ -47,6 +48,27 @@ const ensureSafeReplicaValue = (value, label) => {
       replicaValue: value,
     });
   }
+};
+
+const buildChaosInvalidImage = (originalImage, suffix) => {
+  const [repoAndTag, digest] = String(originalImage || "").split("@");
+  if (!repoAndTag) {
+    return "";
+  }
+
+  if (digest) {
+    return `${repoAndTag}:${suffix}`;
+  }
+
+  const lastColon = repoAndTag.lastIndexOf(":");
+  const lastSlash = repoAndTag.lastIndexOf("/");
+  const hasTag = lastColon > lastSlash;
+
+  if (hasTag) {
+    return `${repoAndTag.substring(0, lastColon)}:${suffix}`;
+  }
+
+  return `${repoAndTag}:${suffix}`;
 };
 
 const resolveDurationSeconds = ({ scenario, durationSeconds }) => {
@@ -175,7 +197,6 @@ const getScenarioCatalog = async () => {
 const revertExecutionRecord = async ({
   execution,
   revertMode,
-  actor,
 }) => {
   const scenario = getScenarioById(execution.scenario_id);
   if (!scenario) {
@@ -185,40 +206,81 @@ const revertExecutionRecord = async ({
     });
   }
 
-  if (scenario.executionType !== "scale_replicas") {
-    throw new ChaosServiceError(
-      400,
-      `Scenario ${execution.scenario_id} is not revert-enabled in Phase 1`,
-      {
-        executionId: execution.id,
-        scenarioId: execution.scenario_id,
+  if (scenario.executionType === "scale_replicas") {
+    const previousReplicas = execution.metadata_json?.previousReplicas;
+    ensureSafeReplicaValue(previousReplicas, "previousReplicas");
+
+    const scaleResult = await scaleServiceDeployment({
+      service: execution.service,
+      replicas: previousReplicas,
+    });
+
+    const revertedExecution = await markExecutionReverted({
+      id: execution.id,
+      revertMode,
+      result: "success",
+      metadataJson: {
+        lastRevertAt: new Date().toISOString(),
+        revertedToReplicas: previousReplicas,
+        revertChanged: scaleResult.changed,
       },
-    );
+    });
+
+    return {
+      execution: summarizeExecution(revertedExecution),
+      mutationResult: {
+        type: "scale_replicas",
+        ...scaleResult,
+      },
+    };
   }
 
-  const previousReplicas = execution.metadata_json?.previousReplicas;
-  ensureSafeReplicaValue(previousReplicas, "previousReplicas");
+  if (scenario.executionType === "patch_container_image") {
+    const originalImage = execution.metadata_json?.originalImage;
+    const containerName = execution.metadata_json?.containerName;
 
-  const scaleResult = await scaleServiceDeployment({
-    service: execution.service,
-    replicas: previousReplicas,
-  });
+    if (!originalImage || !containerName) {
+      throw new ChaosServiceError(
+        409,
+        "Missing revert metadata for ImagePullFailSimulation",
+        { executionId: execution.id },
+      );
+    }
 
-  const revertedExecution = await markExecutionReverted({
-    id: execution.id,
-    revertMode,
-    result: "success",
-    metadataJson: {
-      lastRevertAt: new Date().toISOString(),
-      revertedToReplicas: previousReplicas,
-      revertChanged: scaleResult.changed,
+    const patchResult = await patchServiceContainerImage({
+      service: execution.service,
+      containerName,
+      image: originalImage,
+    });
+
+    const revertedExecution = await markExecutionReverted({
+      id: execution.id,
+      revertMode,
+      result: "success",
+      metadataJson: {
+        lastRevertAt: new Date().toISOString(),
+        revertedToImage: originalImage,
+        revertChanged: patchResult.changed,
+      },
+    });
+
+    return {
+      execution: summarizeExecution(revertedExecution),
+      mutationResult: {
+        type: "patch_container_image",
+        ...patchResult,
+      },
+    };
+  }
+
+  throw new ChaosServiceError(
+    400,
+    `Scenario ${execution.scenario_id} is not revert-enabled in Phase 1`,
+    {
+      executionId: execution.id,
+      scenarioId: execution.scenario_id,
     },
-  });
-
-  return {
-    execution: summarizeExecution(revertedExecution),
-    scaleResult,
-  };
+  );
 };
 
 const triggerScenarioExecution = async ({
@@ -304,97 +366,192 @@ const triggerScenarioExecution = async ({
     );
   }
 
-  if (scenario.executionType !== "scale_replicas") {
-    await auditFailureAndThrow(
-      400,
-      `Scenario ${scenario.id} is not executable in Phase 1`,
+  if (scenario.executionType === "scale_replicas") {
+    ensureSafeReplicaValue(scenario.targetReplicas, "targetReplicas");
+
+    let deploymentSummary;
+    try {
+      deploymentSummary = await getServiceDeploymentSummary(service);
+    } catch (err) {
+      await auditFailureAndThrow(
+        503,
+        `Failed to fetch current deployment state: ${err.message}`,
+      );
+    }
+
+    const previousReplicas = deploymentSummary?.desiredReplicas;
+    ensureSafeReplicaValue(previousReplicas, "current desired replicas");
+
+    if (previousReplicas === scenario.targetReplicas) {
+      await auditFailureAndThrow(
+        409,
+        `Service already at requested chaos state (replicas=${scenario.targetReplicas})`,
+      );
+    }
+
+    let scaleResult;
+    try {
+      scaleResult = await scaleServiceDeployment({
+        service,
+        replicas: scenario.targetReplicas,
+      });
+    } catch (err) {
+      await auditFailureAndThrow(503, `Failed to apply scenario: ${err.message}`);
+    }
+
+    const startedAt = new Date();
+    const expiresAt = new Date(
+      startedAt.getTime() + resolvedDurationSeconds * 1000,
     );
-  }
 
-  ensureSafeReplicaValue(scenario.targetReplicas, "targetReplicas");
-
-  let deploymentSummary;
-  try {
-    deploymentSummary = await getServiceDeploymentSummary(service);
-  } catch (err) {
-    await auditFailureAndThrow(
-      503,
-      `Failed to fetch current deployment state: ${err.message}`,
-    );
-  }
-
-  const previousReplicas = deploymentSummary?.desiredReplicas;
-  ensureSafeReplicaValue(previousReplicas, "current desired replicas");
-
-  if (previousReplicas === scenario.targetReplicas) {
-    await auditFailureAndThrow(
-      409,
-      `Service already at requested chaos state (replicas=${scenario.targetReplicas})`,
-    );
-  }
-
-  let scaleResult;
-  try {
-    scaleResult = await scaleServiceDeployment({
-      service,
-      replicas: scenario.targetReplicas,
-    });
-  } catch (err) {
-    await auditFailureAndThrow(503, `Failed to apply scenario: ${err.message}`);
-  }
-
-  const startedAt = new Date();
-  const expiresAt = new Date(
-    startedAt.getTime() + resolvedDurationSeconds * 1000,
-  );
-
-  const execution = await createExecution({
-    scenarioId: scenario.id,
-    service,
-    requestedBy: actor?.userEmail || null,
-    reason: reason || null,
-    startedAt: startedAt.toISOString(),
-    expiresAt: expiresAt.toISOString(),
-    metadataJson: {
-      namespace: CONTROL_PLANE_NAMESPACE,
-      previousReplicas: scaleResult.previousReplicas,
-      requestedReplicas: scenario.targetReplicas,
-      durationSeconds: resolvedDurationSeconds,
-      triggeredBy: actor?.userEmail || null,
-      triggerSource: "api",
-    },
-  });
-
-  const audit = await writeChaosAudit({
-    actor,
-    action,
-    service,
-    requestedReplicas: scenario.targetReplicas,
-    previousReplicas: scaleResult.previousReplicas,
-    result: "success",
-    reason: buildAuditReason({
+    const execution = await createExecution({
       scenarioId: scenario.id,
-      message: "triggered",
-      durationSeconds: resolvedDurationSeconds,
-      extra: reason ? `reason=${reason}` : null,
-    }),
-  });
+      service,
+      requestedBy: actor?.userEmail || null,
+      reason: reason || null,
+      startedAt: startedAt.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+      metadataJson: {
+        namespace: CONTROL_PLANE_NAMESPACE,
+        previousReplicas: scaleResult.previousReplicas,
+        requestedReplicas: scenario.targetReplicas,
+        durationSeconds: resolvedDurationSeconds,
+        triggeredBy: actor?.userEmail || null,
+        triggerSource: "api",
+      },
+    });
 
-  return {
-    scenario: {
-      id: scenario.id,
-      name: scenario.name,
-      category: scenario.category,
-      autoRevert: scenario.autoRevert,
-    },
-    execution: summarizeExecution(execution),
-    scale: {
-      previousReplicas: scaleResult.previousReplicas,
+    const audit = await writeChaosAudit({
+      actor,
+      action,
+      service,
       requestedReplicas: scenario.targetReplicas,
-      changed: scaleResult.changed,
-    },
-    audit,
-  };
+      previousReplicas: scaleResult.previousReplicas,
+      result: "success",
+      reason: buildAuditReason({
+        scenarioId: scenario.id,
+        message: "triggered",
+        durationSeconds: resolvedDurationSeconds,
+        extra: reason ? `reason=${reason}` : null,
+      }),
+    });
+
+    return {
+      scenario: {
+        id: scenario.id,
+        name: scenario.name,
+        category: scenario.category,
+        autoRevert: scenario.autoRevert,
+      },
+      execution: summarizeExecution(execution),
+      mutation: {
+        type: "scale_replicas",
+        previousReplicas: scaleResult.previousReplicas,
+        requestedReplicas: scenario.targetReplicas,
+        changed: scaleResult.changed,
+      },
+      audit,
+    };
+  }
+
+  if (scenario.executionType === "patch_container_image") {
+    let deploymentSummary;
+    try {
+      deploymentSummary = await getServiceDeploymentSummary(service);
+    } catch (err) {
+      await auditFailureAndThrow(
+        503,
+        `Failed to fetch current deployment state: ${err.message}`,
+      );
+    }
+
+    const originalImage = deploymentSummary?.image;
+    if (!originalImage) {
+      await auditFailureAndThrow(409, "Current deployment image is missing");
+    }
+
+    const chaosImageTagSuffix = scenario.chaosImageTagSuffix || "chaos-invalid";
+    const chaosImage = buildChaosInvalidImage(originalImage, chaosImageTagSuffix);
+    if (!chaosImage || chaosImage === originalImage) {
+      await auditFailureAndThrow(409, "Could not derive deterministic chaos image");
+    }
+
+    let patchResult;
+    try {
+      patchResult = await patchServiceContainerImage({
+        service,
+        containerName: service,
+        image: chaosImage,
+      });
+    } catch (err) {
+      await auditFailureAndThrow(503, `Failed to apply scenario: ${err.message}`);
+    }
+
+    if (!patchResult.previousImage) {
+      await auditFailureAndThrow(409, "Current container image is missing");
+    }
+
+    const startedAt = new Date();
+    const expiresAt = new Date(
+      startedAt.getTime() + resolvedDurationSeconds * 1000,
+    );
+
+    const execution = await createExecution({
+      scenarioId: scenario.id,
+      service,
+      requestedBy: actor?.userEmail || null,
+      reason: reason || null,
+      startedAt: startedAt.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+      metadataJson: {
+        namespace: CONTROL_PLANE_NAMESPACE,
+        containerName: patchResult.containerName,
+        originalImage: patchResult.previousImage,
+        chaosImage,
+        chaosImageTagSuffix,
+        durationSeconds: resolvedDurationSeconds,
+        triggeredBy: actor?.userEmail || null,
+        triggerSource: "api",
+      },
+    });
+
+    const audit = await writeChaosAudit({
+      actor,
+      action,
+      service,
+      requestedReplicas: null,
+      previousReplicas: null,
+      result: "success",
+      reason: buildAuditReason({
+        scenarioId: scenario.id,
+        message: "triggered",
+        durationSeconds: resolvedDurationSeconds,
+        extra: `chaosImageTagSuffix=${chaosImageTagSuffix}${reason ? `; reason=${reason}` : ""}`,
+      }),
+    });
+
+    return {
+      scenario: {
+        id: scenario.id,
+        name: scenario.name,
+        category: scenario.category,
+        autoRevert: scenario.autoRevert,
+      },
+      execution: summarizeExecution(execution),
+      mutation: {
+        type: "patch_container_image",
+        previousImage: patchResult.previousImage,
+        requestedImage: patchResult.requestedImage,
+        changed: patchResult.changed,
+      },
+      audit,
+    };
+  }
+
+  await auditFailureAndThrow(
+    400,
+    `Scenario ${scenario.id} is not executable in Phase 1`,
+  );
 };
 
 const revertScenarioExecution = async ({
@@ -457,7 +614,7 @@ const revertScenarioExecution = async ({
     return {
       alreadyReverted: false,
       execution: reverted.execution,
-      scale: reverted.scaleResult,
+      mutation: reverted.mutationResult,
       audit,
     };
   } catch (err) {

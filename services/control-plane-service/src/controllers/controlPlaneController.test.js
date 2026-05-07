@@ -240,6 +240,11 @@ describe("chaos scenario endpoints", () => {
         scenarioId: "ScaleToZero",
         service: "payment-service",
       },
+      mutation: {
+        previousReplicas: 1,
+        requestedReplicas: 0,
+        changed: true,
+      },
       scale: {
         previousReplicas: 1,
         requestedReplicas: 0,
@@ -294,6 +299,11 @@ describe("chaos scenario endpoints", () => {
         id: 10,
         scenarioId: "ScaleToZero",
         service: "payment-service",
+      },
+      mutation: {
+        previousReplicas: 1,
+        requestedReplicas: 0,
+        changed: true,
       },
       scale: {
         previousReplicas: 1,
