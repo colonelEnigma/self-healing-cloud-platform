@@ -1,6 +1,6 @@
 # Backend Context (Canonical)
 
-Last updated: 2026-05-08
+Last updated: 2026-05-08 (Phase 3 bootstrap)
 
 ## Purpose
 
@@ -169,9 +169,31 @@ Assumptions:
   - Response shape includes `service`, `generatedAt`, `timeline`, `probableCauseCandidates`, `confidence`, `recovery`.
   - No-data behavior: HTTP `200` with empty `timeline`/`probableCauseCandidates` and `recovery.state = "no_incidents"`.
 - Next queued phases from chaos plan:
-  - Phase 3: RAG advice with citations
+  - Phase 3: RAG advice with citations (bootstrap endpoint now implemented)
   - Phase 4: Similar incident retrieval (vector-ready layer)
   - Phase 5: MCP-aligned provider hardening
+
+## Phase 3 Bootstrap (Ops Advice with Citations)
+
+Implemented backend surface:
+- `POST /api/control-plane/ops/advice`
+
+Request body:
+- `service` (required, allowlisted)
+- `question` (required, max 800 chars)
+
+Response shape:
+- `service`, `namespace`, `question`
+- `confidence` (`low` | `medium` | `high`)
+- `advice` (string array)
+- `citations` (`path`, `section`, `excerpt`)
+- `incidentContext` (recovery + probable causes + latest summary)
+- `warnings`, `generatedAt`, `readOnly`
+
+Safety:
+- Admin-only and read-only (no mutation)
+- Prod scope only via control-plane namespace and allowlist checks
+- No secret access
 
 ## Phase 2 Validation Commands (Incident Timeline + Deterministic Analyzer)
 
@@ -201,3 +223,17 @@ Assumptions:
 4. Verify admin guard:
 - `curl "$CONTROL_PLANE_BASE/api/control-plane/incidents/payment-service" -H "Authorization: Bearer $NON_ADMIN_JWT"`
 - Expected output: JWT/admin guard rejection (`401` or `403`, depending on middleware path).
+
+## Phase 3 Validation Commands (Ops Advice Bootstrap)
+
+Assumptions:
+- `CONTROL_PLANE_BASE` points to `http://localhost:18080`.
+- `ADMIN_JWT` is a valid admin token.
+
+1. Request advice for allowlisted service:
+- `curl -X POST "$CONTROL_PLANE_BASE/api/control-plane/ops/advice" -H "Content-Type: application/json" -H "Authorization: Bearer $ADMIN_JWT" -d "{\"service\":\"payment-service\",\"question\":\"What should I check next for KafkaUnavailable recovery stability?\"}"`
+- Expected output: HTTP `200` with `advice[]` and `citations[]` plus `confidence`.
+
+2. Verify allowlist enforcement:
+- `curl -X POST "$CONTROL_PLANE_BASE/api/control-plane/ops/advice" -H "Content-Type: application/json" -H "Authorization: Bearer $ADMIN_JWT" -d "{\"service\":\"unknown-service\",\"question\":\"help\"}"`
+- Expected output: HTTP `400` with allowlist validation error.

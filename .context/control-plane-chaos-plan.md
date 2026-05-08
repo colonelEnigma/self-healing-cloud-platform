@@ -1,7 +1,7 @@
 # Control Plane Chaos Plan
 
 Last updated: 2026-05-08
-Status: Phase 0 completed; Phase 1 completed; Phase 2 implemented (incident timeline + deterministic analyzer). Next active phase: Phase 3
+Status: Phase 0 completed; Phase 1 completed; Phase 2 implemented; Phase 3 bootstrap in progress
 Scope: Admin-triggered chaos scenarios and backend implementation for self-healing + analysis
 
 ## Goal
@@ -457,6 +457,30 @@ Exit criteria:
 - Advice output includes citations for every recommendation.
 - Responses stay read-only/advisory.
 - Admin-only access and logging are enforced.
+
+Phase 3 bootstrap status (2026-05-08):
+
+- DONE (repo): new advisory endpoint scaffolded:
+  - `POST /api/control-plane/ops/advice`
+- DONE (repo): service-side validation added:
+  - allowlisted `service` required
+  - `question` required (max 800 chars)
+- DONE (repo): deterministic advice assembly added from:
+  - latest incident timeline/summaries
+  - active Prometheus alert context
+  - markdown corpus citations from `docs/` and `.context/`
+- DONE (repo): response now includes structured `citations[]` (`path`, `section`, `excerpt`) and confidence label (`low|medium|high`).
+- NOTE: this is Phase 3 bootstrap (read-only, citation-grounded) and can be incrementally hardened/expanded.
+
+Phase 3 bootstrap validation commands:
+
+1. Basic advice request:
+- `curl -X POST "$CONTROL_PLANE_BASE/api/control-plane/ops/advice" -H "Content-Type: application/json" -H "Authorization: Bearer $ADMIN_JWT" -d "{\"service\":\"payment-service\",\"question\":\"What should I verify after KafkaUnavailable auto-revert?\"}"`
+- Expected output: HTTP `200` with `advice[]`, `citations[]`, and `confidence`.
+
+2. Invalid service:
+- `curl -X POST "$CONTROL_PLANE_BASE/api/control-plane/ops/advice" -H "Content-Type: application/json" -H "Authorization: Bearer $ADMIN_JWT" -d "{\"service\":\"unknown-service\",\"question\":\"help\"}"`
+- Expected output: HTTP `400` validation error.
 
 ### Phase 4: Similar Incident Retrieval + Vector Layer
 

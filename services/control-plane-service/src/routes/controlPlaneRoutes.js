@@ -22,6 +22,7 @@ const {
   postRevertAllChaosScenarios,
   getAiStatus,
   postAiChat,
+  postOpsAdvice,
 } = require("../controllers/controlPlaneController");
 
 const router = express.Router();
@@ -64,5 +65,6 @@ router.post("/demo/scenarios/revert", postRevertChaosScenario);
 router.post("/demo/scenarios/revert-all", postRevertAllChaosScenarios);
 router.get("/ai/status", getAiStatus);
 router.post("/ai/chat", postAiChat);
+router.post("/ops/advice", postOpsAdvice);
 
 module.exports = router;

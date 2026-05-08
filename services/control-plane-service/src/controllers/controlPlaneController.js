@@ -34,6 +34,10 @@ const {
   getIncidentTimelineByService: getIncidentTimelineByServiceData,
 } = require("../services/incidentAnalyzerService");
 const {
+  validateOpsAdviceRequest,
+  getOpsAdvice,
+} = require("../services/opsAdviceService");
+const {
   ChaosServiceError,
   getScenarioCatalog,
   triggerScenarioExecution,
@@ -834,6 +838,27 @@ const postAiChat = async (req, res) => {
   }
 };
 
+const postOpsAdvice = async (req, res) => {
+  const payload = {
+    service: req.body.service,
+    question: req.body.question,
+  };
+  const validation = validateOpsAdviceRequest(payload);
+  if (!validation.valid) {
+    return res.status(validation.status).json(validation);
+  }
+
+  try {
+    const result = await getOpsAdvice(payload);
+    return res.status(200).json(result);
+  } catch (err) {
+    return res.status(502).json({
+      message: "Failed to generate control-plane ops advice",
+      error: err.message,
+    });
+  }
+};
+
 module.exports = {
   getStatus,
   getOverview,
@@ -854,4 +879,5 @@ module.exports = {
   postRevertAllChaosScenarios,
   getAiStatus,
   postAiChat,
+  postOpsAdvice,
 };
