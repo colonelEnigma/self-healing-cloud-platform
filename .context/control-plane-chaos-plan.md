@@ -1,7 +1,7 @@
 # Control Plane Chaos Plan
 
 Last updated: 2026-05-08
-Status: Phase 0 completed; Phase 1 completed; Phase 2 implemented; Phase 3 bootstrap in progress
+Status: Phase 0 completed; Phase 1 completed; Phase 2 implemented; Phase 3 completed. Next active phase: Phase 4
 Scope: Admin-triggered chaos scenarios and backend implementation for self-healing + analysis
 
 ## Goal
@@ -458,7 +458,7 @@ Exit criteria:
 - Responses stay read-only/advisory.
 - Admin-only access and logging are enforced.
 
-Phase 3 bootstrap status (2026-05-08):
+Phase 3 execution status (2026-05-08):
 
 - DONE (repo): new advisory endpoint scaffolded:
   - `POST /api/control-plane/ops/advice`
@@ -470,9 +470,9 @@ Phase 3 bootstrap status (2026-05-08):
   - active Prometheus alert context
   - markdown corpus citations from `docs/` and `.context/`
 - DONE (repo): response now includes structured `citations[]` (`path`, `section`, `excerpt`) and confidence label (`low|medium|high`).
-- NOTE: this is Phase 3 bootstrap (read-only, citation-grounded) and can be incrementally hardened/expanded.
+- PHASE GATE: COMPLETE. Advisory endpoint with citation-grounded read-only output is implemented and validated for current scope.
 
-Phase 3 bootstrap validation commands:
+Phase 3 validation commands:
 
 1. Basic advice request:
 - `curl -X POST "$CONTROL_PLANE_BASE/api/control-plane/ops/advice" -H "Content-Type: application/json" -H "Authorization: Bearer $ADMIN_JWT" -d "{\"service\":\"payment-service\",\"question\":\"What should I verify after KafkaUnavailable auto-revert?\"}"`
@@ -499,6 +499,55 @@ Exit criteria:
 
 - Similar incidents returned with score and linked outcome context.
 - Retrieval filtered by service/date/scenario metadata.
+
+Phase 4 execution status (2026-05-08):
+
+- STATUS: IN PROGRESS
+- Locked decisions:
+  - dual-store architecture (`incident_summaries` in Postgres as source-of-truth + vector index in Qdrant)
+  - vector DB target: Qdrant on AWS EC2
+  - embedding provider strategy: local embedding model first, OpenAI/OpenRouter fallback via pluggable provider
+  - tests deferred for initial implementation pass; manual validation first
+- Current objective:
+  - implement `GET /api/control-plane/incidents/:service/similar` with vector similarity ranking and incident metadata hydration
+
+Phase 4 implementation checklist:
+
+1. Provision vector DB:
+- create AWS EC2 instance and run Qdrant service
+- restrict access via Security Group allowlist (control-plane service source only)
+
+2. Backend vector integration:
+- add vector client adapter/service in `control-plane-service`
+- add env-driven provider config for Qdrant endpoint and embedding provider selection
+
+3. Incident embedding pipeline:
+- build canonical incident text from existing incident summaries
+- upsert embeddings and metadata to Qdrant on-demand and/or via backfill command
+
+4. Similar incidents endpoint:
+- implement `GET /api/control-plane/incidents/:service/similar`
+- support `limit` and optional anchor incident selection
+- return sorted similarity results with scenario/outcome/recovery context
+
+5. Manual validation:
+- validate endpoint behavior for allowlisted service, empty service history, and guardrail failures
+- verify vector index upsert/query flow against Qdrant
+
+Phase 4 progress log:
+
+- 2026-05-08: Phase 4 plan finalized with dual-store and Qdrant-on-EC2 direction.
+- 2026-05-08: Next step queued: provision AWS EC2 and deploy Qdrant.
+
+Phase 4 validation command placeholders:
+
+1. Similar incidents request:
+- `curl "$CONTROL_PLANE_BASE/api/control-plane/incidents/payment-service/similar?limit=5" -H "Authorization: Bearer $ADMIN_JWT"`
+- Expected output: HTTP `200` with ranked `results[]` containing similarity scores and incident context.
+
+2. Guardrail check:
+- `curl "$CONTROL_PLANE_BASE/api/control-plane/incidents/unknown-service/similar" -H "Authorization: Bearer $ADMIN_JWT"`
+- Expected output: HTTP `400` allowlist validation error.
 
 ### Phase 5: MCP-Aligned Data Provider + Hardening
 

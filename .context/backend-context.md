@@ -1,6 +1,6 @@
 # Backend Context (Canonical)
 
-Last updated: 2026-05-08 (Phase 3 bootstrap)
+Last updated: 2026-05-08 (Phase 3 complete)
 
 ## Purpose
 
@@ -152,6 +152,7 @@ Assumptions:
 - `docs/rollback-runbook.md`
 - `docs/control-plane-ai-lmstudio.md`
 - `docs/cloudpulse-ui-runbook.md`
+- `docs/vector-retrieval-runbook.md` (planned for Phase 4 implementation tracking)
 - `prometheus-values.yaml`
 - `k8s/monitoring/grafana-values.yaml`
 
@@ -169,11 +170,21 @@ Assumptions:
   - Response shape includes `service`, `generatedAt`, `timeline`, `probableCauseCandidates`, `confidence`, `recovery`.
   - No-data behavior: HTTP `200` with empty `timeline`/`probableCauseCandidates` and `recovery.state = "no_incidents"`.
 - Next queued phases from chaos plan:
-  - Phase 3: RAG advice with citations (bootstrap endpoint now implemented)
   - Phase 4: Similar incident retrieval (vector-ready layer)
   - Phase 5: MCP-aligned provider hardening
+  
+Phase 3 (RAG advice with citations) is complete for current scope:
+- `POST /api/control-plane/ops/advice` implemented.
+- Citation-grounded advisory output implemented.
+- Admin-only and read-only guardrails enforced.
 
-## Phase 3 Bootstrap (Ops Advice with Citations)
+Phase 4 is now in progress with locked architecture decisions:
+- dual-store: Postgres metadata + Qdrant vector index
+- Qdrant deployment target: AWS EC2
+- embedding strategy: local model first, OpenAI/OpenRouter fallback
+- immediate next action: provision EC2 and bring up Qdrant before backend vector endpoint wiring
+
+## Phase 3 Complete (Ops Advice with Citations)
 
 Implemented backend surface:
 - `POST /api/control-plane/ops/advice`
@@ -224,7 +235,7 @@ Assumptions:
 - `curl "$CONTROL_PLANE_BASE/api/control-plane/incidents/payment-service" -H "Authorization: Bearer $NON_ADMIN_JWT"`
 - Expected output: JWT/admin guard rejection (`401` or `403`, depending on middleware path).
 
-## Phase 3 Validation Commands (Ops Advice Bootstrap)
+## Phase 3 Validation Commands (Ops Advice)
 
 Assumptions:
 - `CONTROL_PLANE_BASE` points to `http://localhost:18080`.
