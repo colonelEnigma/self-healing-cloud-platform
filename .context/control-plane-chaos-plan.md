@@ -1,7 +1,7 @@
 # Control Plane Chaos Plan
 
 Last updated: 2026-05-07
-Status: Phase 0 completed; Phase 1 implemented with ten executable canonical scenarios
+Status: Phase 0 completed; Phase 1 completed (chaos scenario stage complete). Next active phase: Phase 2
 Scope: Admin-triggered chaos scenarios and backend implementation for self-healing + analysis
 
 ## Goal
@@ -318,6 +318,7 @@ Phase 1 execution status (updated 2026-05-07):
 - NOTE: non-canonical legacy scenario IDs are no longer accepted by trigger/revert-by-scenario flows.
 - DONE (frontend verification): Control Panel UI validated against canonical scenario catalog via the standard `/api/control-plane/* -> http://localhost:18080` path after refreshing the local tunnel/backend image alignment.
 - DONE (frontend validation): all canonical scenarios successfully triggered from frontend against `monitoring` deployment with expected live fault behavior and deterministic revert.
+- PHASE GATE: COMPLETE. Chaos scenario implementation/validation stage is finished and ready for transition to Phase 2.
 
 Phase 1 validation commands for `BadLivenessProbe` (run against control-plane API):
 

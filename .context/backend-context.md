@@ -157,7 +157,7 @@ Assumptions:
 
 ## Next Workstream
 
-- Continue Phase 2+ from chaos plan:
+- Chaos scenario stage is complete. Start Phase 2 from chaos plan:
   - Incident timeline and deterministic log analyzer
   - RAG advice with citations
   - Similar incident retrieval (vector-ready layer)
