@@ -1,6 +1,6 @@
 # Backend Context (Canonical)
 
-Last updated: 2026-05-07
+Last updated: 2026-05-08
 
 ## Purpose
 
@@ -157,8 +157,47 @@ Assumptions:
 
 ## Next Workstream
 
-- Chaos scenario stage is complete. Start Phase 2 from chaos plan:
-  - Incident timeline and deterministic log analyzer
-  - RAG advice with citations
-  - Similar incident retrieval (vector-ready layer)
-  - MCP-aligned provider hardening
+- Phase 2 (Incident Timeline + Deterministic Log Analyzer) is now implemented in `control-plane-service`:
+  - Postgres persistence added for `incident_summaries` (no vector DB/Redis in Phase 2).
+  - New endpoint added: `GET /api/control-plane/incidents/:service` (admin-only, prod-only, allowlist-only).
+  - Deterministic analyzer correlates:
+    - chaos execution records
+    - control-plane audit actions
+    - Kubernetes events/logs
+    - Prometheus alerts
+    - healer history
+  - Response shape includes `service`, `generatedAt`, `timeline`, `probableCauseCandidates`, `confidence`, `recovery`.
+  - No-data behavior: HTTP `200` with empty `timeline`/`probableCauseCandidates` and `recovery.state = "no_incidents"`.
+- Next queued phases from chaos plan:
+  - Phase 3: RAG advice with citations
+  - Phase 4: Similar incident retrieval (vector-ready layer)
+  - Phase 5: MCP-aligned provider hardening
+
+## Phase 2 Validation Commands (Incident Timeline + Deterministic Analyzer)
+
+Assumptions:
+- `CONTROL_PLANE_BASE` points to `http://localhost:18080`.
+- `ADMIN_JWT` is a valid admin token.
+- `NON_ADMIN_JWT` is a valid non-admin token.
+
+1. Run backend tests:
+- `cd services/control-plane-service && npm test`
+- Expected output: Jest passes including `incidentAnalyzerService.test.js` and controller incident endpoint tests.
+
+2. Fetch incident timeline for allowlisted service:
+- `curl "$CONTROL_PLANE_BASE/api/control-plane/incidents/payment-service" -H "Authorization: Bearer $ADMIN_JWT"`
+- Expected output: HTTP `200` with keys:
+  - `service`
+  - `generatedAt`
+  - `timeline` (array)
+  - `probableCauseCandidates` (array)
+  - `confidence` (number)
+  - `recovery` (object)
+
+3. Verify allowlist enforcement:
+- `curl "$CONTROL_PLANE_BASE/api/control-plane/incidents/unknown-service" -H "Authorization: Bearer $ADMIN_JWT"`
+- Expected output: HTTP `400` with allowlist validation error.
+
+4. Verify admin guard:
+- `curl "$CONTROL_PLANE_BASE/api/control-plane/incidents/payment-service" -H "Authorization: Bearer $NON_ADMIN_JWT"`
+- Expected output: JWT/admin guard rejection (`401` or `403`, depending on middleware path).

@@ -38,6 +38,10 @@ jest.mock("../services/chaosService", () => {
   };
 });
 
+jest.mock("../services/incidentAnalyzerService", () => ({
+  getIncidentTimelineByService: jest.fn(),
+}));
+
 const {
   scaleServiceDeployment,
 } = require("../services/kubernetesService");
@@ -56,8 +60,12 @@ const {
   revertAllActiveScenarioExecutions,
 } = require("../services/chaosService");
 const {
+  getIncidentTimelineByService,
+} = require("../services/incidentAnalyzerService");
+const {
   getResilience,
   getChaosScenarios,
+  getIncidentTimelineByService: getIncidentTimelineByServiceHandler,
   postTriggerChaosScenario,
   postRevertChaosScenario,
   postRevertAllChaosScenarios,
@@ -394,6 +402,101 @@ describe("chaos scenario endpoints", () => {
       reverted: 2,
       failed: 0,
       results: [],
+    });
+  });
+});
+
+describe("getIncidentTimelineByService", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("returns incident timeline payload for allowlisted service", async () => {
+    getIncidentTimelineByService.mockResolvedValue({
+      service: "payment-service",
+      generatedAt: "2026-05-08T10:00:00.000Z",
+      timeline: [{ type: "chaos_trigger", timestamp: "2026-05-08T09:30:00.000Z" }],
+      probableCauseCandidates: [{ key: "chaos_scenario_triggered", score: 0.6 }],
+      confidence: 0.6,
+      recovery: { state: "recovered", outcome: "service_recovered", by: "healer" },
+      warnings: [],
+      incidents: [],
+    });
+
+    const req = {
+      params: { service: "payment-service" },
+      query: { limit: "5", lookbackMinutes: "30" },
+    };
+    const res = buildResponse();
+
+    await getIncidentTimelineByServiceHandler(req, res);
+
+    expect(getIncidentTimelineByService).toHaveBeenCalledWith({
+      service: "payment-service",
+      limit: 5,
+      lookbackMinutes: 30,
+    });
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        service: "payment-service",
+        timeline: expect.any(Array),
+        probableCauseCandidates: expect.any(Array),
+        confidence: 0.6,
+        recovery: expect.objectContaining({ state: "recovered" }),
+      }),
+    );
+  });
+
+  it("returns deterministic empty shape when no incidents exist", async () => {
+    getIncidentTimelineByService.mockResolvedValue({
+      service: "search-service",
+      generatedAt: "2026-05-08T10:00:00.000Z",
+      timeline: [],
+      probableCauseCandidates: [],
+      confidence: 0,
+      recovery: { state: "no_incidents", outcome: "no_incidents", by: "none" },
+      warnings: [],
+      incidents: [],
+    });
+
+    const req = {
+      params: { service: "search-service" },
+      query: {},
+    };
+    const res = buildResponse();
+
+    await getIncidentTimelineByServiceHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        service: "search-service",
+        timeline: [],
+        probableCauseCandidates: [],
+        confidence: 0,
+        recovery: expect.objectContaining({ state: "no_incidents" }),
+      }),
+    );
+  });
+
+  it("maps analyzer errors to 500 response", async () => {
+    getIncidentTimelineByService.mockRejectedValue(
+      new Error("prometheus temporarily unavailable"),
+    );
+
+    const req = {
+      params: { service: "payment-service" },
+      query: {},
+    };
+    const res = buildResponse();
+
+    await getIncidentTimelineByServiceHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({
+      message: "Failed to build incident timeline for payment-service",
+      error: "prometheus temporarily unavailable",
     });
   });
 });

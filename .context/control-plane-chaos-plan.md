@@ -1,7 +1,7 @@
 # Control Plane Chaos Plan
 
-Last updated: 2026-05-07
-Status: Phase 0 completed; Phase 1 completed (chaos scenario stage complete). Next active phase: Phase 2
+Last updated: 2026-05-08
+Status: Phase 0 completed; Phase 1 completed; Phase 2 implemented (incident timeline + deterministic analyzer). Next active phase: Phase 3
 Scope: Admin-triggered chaos scenarios and backend implementation for self-healing + analysis
 
 ## Goal
@@ -403,6 +403,41 @@ Exit criteria:
 - Incident timeline is generated for active and completed scenarios.
 - Cause candidates and confidence are returned consistently.
 - Recovery states align with healer and deployment telemetry.
+
+Phase 2 execution status (2026-05-08):
+
+- DONE (repo): `incident_summaries` persistence in Postgres added (Phase 2 uses Postgres only, no vector DB/Redis).
+- DONE (repo): incident summary repository added with create/update/upsert/list-by-service/get-by-execution behavior.
+- DONE (repo): deterministic analyzer service added to correlate:
+  - `chaos_scenario_executions`
+  - `control_plane_actions`
+  - Kubernetes events/logs for allowlisted prod services
+  - Prometheus alerts
+  - healer history
+- DONE (repo): endpoint added:
+  - `GET /api/control-plane/incidents/:service`
+- DONE (repo): endpoint returns deterministic shape:
+  - `service`, `generatedAt`, `timeline`, `probableCauseCandidates`, `confidence`, `recovery`
+  - no-data path returns HTTP `200` with empty arrays and `recovery.state = "no_incidents"`
+- DONE (repo tests): analyzer unit tests and controller endpoint tests added for deterministic behavior and partial-source failure handling.
+
+Phase 2 validation commands:
+
+1. Run tests:
+- `cd services/control-plane-service && npm test`
+- Expected output: all tests pass including analyzer and incident endpoint suites.
+
+2. Fetch incidents for allowlisted service:
+- `curl "$CONTROL_PLANE_BASE/api/control-plane/incidents/payment-service" -H "Authorization: Bearer $ADMIN_JWT"`
+- Expected output: HTTP `200` with `timeline`, `probableCauseCandidates`, `confidence`, `recovery`.
+
+3. Verify allowlist guard:
+- `curl "$CONTROL_PLANE_BASE/api/control-plane/incidents/unknown-service" -H "Authorization: Bearer $ADMIN_JWT"`
+- Expected output: HTTP `400` allowlist validation error.
+
+4. Verify admin guard:
+- `curl "$CONTROL_PLANE_BASE/api/control-plane/incidents/payment-service" -H "Authorization: Bearer $NON_ADMIN_JWT"`
+- Expected output: `401`/`403` (existing auth/admin middleware behavior).
 
 ### Phase 3: RAG Advice with Citations
 

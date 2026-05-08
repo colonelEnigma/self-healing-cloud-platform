@@ -31,6 +31,9 @@ const {
   getAiAssistantStatus,
 } = require("../services/aiAssistantService");
 const {
+  getIncidentTimelineByService: getIncidentTimelineByServiceData,
+} = require("../services/incidentAnalyzerService");
+const {
   ChaosServiceError,
   getScenarioCatalog,
   triggerScenarioExecution,
@@ -478,6 +481,26 @@ const getServiceEventsHandler = async (req, res) => {
   }
 };
 
+const getIncidentTimelineByService = async (req, res) => {
+  const { service } = req.params;
+  const limit = clampInteger(req.query.limit, 10, 1, 20);
+  const lookbackMinutes = clampInteger(req.query.lookbackMinutes, 30, 5, 180);
+
+  try {
+    const data = await getIncidentTimelineByServiceData({
+      service,
+      limit,
+      lookbackMinutes,
+    });
+    return res.status(200).json(data);
+  } catch (err) {
+    return res.status(500).json({
+      message: `Failed to build incident timeline for ${service}`,
+      error: err.message,
+    });
+  }
+};
+
 const postScaleAction = async (req, res) => {
   const namespace = req.body.namespace;
   const service = req.body.service;
@@ -822,6 +845,7 @@ module.exports = {
   getCombinedLogs,
   getServiceLogsHandler,
   getServiceEventsHandler,
+  getIncidentTimelineByService,
   postScaleAction,
   getControlPlaneActions,
   getChaosScenarios,

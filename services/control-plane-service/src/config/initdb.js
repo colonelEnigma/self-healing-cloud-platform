@@ -107,6 +107,40 @@ const initDb = async () => {
         ON chaos_scenario_executions (scenario_id);
       `);
 
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS incident_summaries (
+          id SERIAL PRIMARY KEY,
+          execution_id INTEGER NOT NULL UNIQUE,
+          service VARCHAR(150) NOT NULL,
+          scenario_id VARCHAR(120) NOT NULL,
+          started_at TIMESTAMP NOT NULL,
+          ended_at TIMESTAMP,
+          symptom TEXT,
+          probable_cause TEXT,
+          confidence NUMERIC(5,4),
+          healer_action TEXT,
+          outcome VARCHAR(80),
+          timeline_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_incident_summaries_service_started_at
+        ON incident_summaries (service, started_at DESC);
+      `);
+
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_incident_summaries_scenario
+        ON incident_summaries (scenario_id);
+      `);
+
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_incident_summaries_started_ended
+        ON incident_summaries (started_at DESC, ended_at DESC);
+      `);
+
       console.log("Control plane audit and chaos tables ready");
       return;
     } catch (err) {

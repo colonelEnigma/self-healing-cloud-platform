@@ -214,6 +214,34 @@ const listDueAutoRevertExecutions = async ({ limit = 20 } = {}) => {
   return result.rows;
 };
 
+const listExecutionsByService = async ({ service, limit = 20 } = {}) => {
+  const safeLimit = Math.min(parsePositiveInteger(limit, 20), 200);
+  const result = await pool.query(
+    `
+      SELECT
+        id,
+        scenario_id,
+        service,
+        requested_by,
+        reason,
+        started_at,
+        expires_at,
+        reverted_at,
+        revert_mode,
+        status,
+        result,
+        metadata_json
+      FROM chaos_scenario_executions
+      WHERE service = $1
+      ORDER BY started_at DESC
+      LIMIT $2
+    `,
+    [service, safeLimit],
+  );
+
+  return result.rows;
+};
+
 const markExecutionReverted = async ({
   id,
   revertMode,
@@ -263,5 +291,6 @@ module.exports = {
   findExecutionById,
   findExecutionForManualRevert,
   listDueAutoRevertExecutions,
+  listExecutionsByService,
   markExecutionReverted,
 };

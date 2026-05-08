@@ -13,6 +13,7 @@ const {
   getCombinedLogs,
   getServiceLogsHandler,
   getServiceEventsHandler,
+  getIncidentTimelineByService,
   postScaleAction,
   getControlPlaneActions,
   getChaosScenarios,
@@ -49,6 +50,11 @@ router.get(
   "/events/:service",
   requireAllowedServiceParam,
   getServiceEventsHandler,
+);
+router.get(
+  "/incidents/:service",
+  requireAllowedServiceParam,
+  getIncidentTimelineByService,
 );
 router.post("/actions/scale", postScaleAction);
 router.get("/actions", getControlPlaneActions);

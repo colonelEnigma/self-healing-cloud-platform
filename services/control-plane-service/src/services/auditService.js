@@ -119,7 +119,40 @@ const listControlPlaneActions = async ({
   };
 };
 
+const listControlPlaneActionsByServiceAndWindow = async ({
+  service,
+  from,
+  to,
+  limit = 200,
+}) => {
+  const safeLimit = Math.min(Math.max(Number.parseInt(limit, 10) || 200, 1), 500);
+  const query = `
+    SELECT
+      id,
+      user_id,
+      user_email,
+      namespace,
+      service,
+      action,
+      requested_replicas,
+      previous_replicas,
+      result,
+      reason,
+      created_at
+    FROM control_plane_actions
+    WHERE service = $1
+      AND ($2::timestamp IS NULL OR created_at >= $2)
+      AND ($3::timestamp IS NULL OR created_at <= $3)
+    ORDER BY created_at ASC
+    LIMIT $4
+  `;
+
+  const result = await pool.query(query, [service, from || null, to || null, safeLimit]);
+  return result.rows;
+};
+
 module.exports = {
   recordControlPlaneAction,
   listControlPlaneActions,
+  listControlPlaneActionsByServiceAndWindow,
 };
