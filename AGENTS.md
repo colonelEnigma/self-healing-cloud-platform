@@ -11,7 +11,7 @@ Recent verified state:
   - Local dev routing model (match existing platform ports):
     - Shop APIs call Docker Compose services directly (users `3000`, orders `3003`, payment `4000`, products `3005`, search `5003`).
     - `/api/control-plane/*` proxies to prod/EKS through local ingress tunnel `http://localhost:18080`.
-    - `/api/control-plane/ai/*` proxies to local `control-plane-service` on `http://localhost:7100` (LM Studio).
+    - `/api/control-plane/ai/*` proxies to prod/EKS through local ingress tunnel `http://localhost:18080` (same path model as other Control Plane APIs).
   - Production build invariant: keep API bases relative (`""`); do not embed any `localhost:*` URLs.
   - Sequencing: complete shop pages (Home + Login + Signup + Catalog/Product list) before starting any Control Panel UI pages.
   - Control Panel non-negotiables: prod-only, live-data-only, allowlist-only; only mutation is typed-confirmed scale to replicas `0` or `1` with audit logging; no secret access; no delete permissions.
@@ -34,7 +34,7 @@ Recent verified state:
 - Frontend direction: treat the `cloudpulse-ui` shadcn/Tailwind UI as the primary frontend going forward. Any legacy/previous frontend implementations are not the default target for new UI work unless explicitly requested.
 - `user-service` role support is implemented and locally verified; login/profile expose `role`.
 - `services/control-plane-service` is implemented and deployed in `monitoring`; it exposes `/health`, `/metrics`, and admin-guarded `/api/control-plane/*` live read APIs plus guarded scale `0/1` with audit logging.
-- `services/control-plane-service` also exposes read-only admin AI assistant endpoints for local LM Studio demos: `GET /api/control-plane/ai/status` and `POST /api/control-plane/ai/chat`, using model id `google/gemma-3-4b`.
+- `services/control-plane-service` exposes read-only admin AI assistant endpoints `GET /api/control-plane/ai/status` and `POST /api/control-plane/ai/chat`; current direction is OpenRouter-backed provider flow in `monitoring`.
 - Local behavior note: `/api/control-plane/status` can return `ready` without live kube connectivity, while endpoints like `/overview` require real Kubernetes access.
 - The Control Panel must remain prod-focused and use live data, not mocks.
 - Control Panel mutation is limited to typed-confirmed scale `0` or `1` for allowlisted prod app deployments.
@@ -70,8 +70,7 @@ Infrastructure and delivery assets are separate: `k8s/` contains Kubernetes mani
 - `cd services/<service-name> && npm install`: installs dependencies for one service.
 - `npm run dev`: runs most services with `nodemon` for local development.
 - `npm start`: runs a service with `node src/server.js`.
-- `docker-compose up --build postgres user-service control-plane-service`: starts the local role-aware user service and Control Plane service container for local API testing.
-- `curl http://localhost:7100/health`: verifies local `control-plane-service` health.
+- `docker-compose up --build`: starts local app/data/observability stack; Control Panel APIs are expected through prod ingress tunnel routing.
 - `kubectl apply -f k8s/<component>/`: applies Kubernetes manifests.
 - `kubectl rollout status deployment/<service-name> -n dev`: verifies a deployment rollout.
 - `helm upgrade prometheus prometheus-community/prometheus -n default -f prometheus-values.yaml`: applies Prometheus/Alertmanager config.

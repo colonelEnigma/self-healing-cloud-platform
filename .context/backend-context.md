@@ -1,6 +1,6 @@
 # Backend Context (Canonical)
 
-Last updated: 2026-05-09 (Phase 4 validated)
+Last updated: 2026-05-09 (Phase 5 in progress)
 
 ## Purpose
 
@@ -143,7 +143,7 @@ Assumptions:
 - Frontend local: `http://localhost:3001`
 - Shop APIs: direct to local Docker services (`3000`, `3003`, `4000`, `3005`, `5003`)
 - `/api/control-plane/*`: proxy to prod/EKS through local ingress tunnel `http://localhost:18080`
-- `/api/control-plane/ai/*`: proxy to local `control-plane-service` `http://localhost:7100`
+- `/api/control-plane/ai/*`: proxy to prod/EKS through local ingress tunnel `http://localhost:18080`
 - Production build invariant: keep API bases relative (`""`), no embedded localhost URLs.
 
 ## Important Runbooks and Files
@@ -169,10 +169,15 @@ Assumptions:
     - healer history
   - Response shape includes `service`, `generatedAt`, `timeline`, `probableCauseCandidates`, `confidence`, `recovery`.
   - No-data behavior: HTTP `200` with empty `timeline`/`probableCauseCandidates` and `recovery.state = "no_incidents"`.
-- Next queued phases from chaos plan:
-  - Phase 4: Similar incident retrieval (vector-ready layer)
-  - Phase 5: MCP-aligned provider hardening
+- Next queued work from chaos plan:
+  - Phase 5 hardening completion and docs/tests finalization.
   - Phase 5 end-cap: upgrade `POST /api/control-plane/ops/advice` to hybrid LLM synthesis (intent-aware + live telemetry + similar incidents + docs citations) for complex question handling.
+
+Phase 5 progress update (2026-05-09):
+- AI chat provider abstraction is implemented with OpenRouter + ordered fallback framework.
+- Current prod direction is OpenRouter-only ordering for reliability in `monitoring`.
+- `POST /api/control-plane/ai/chat` now uses payload contract `service + question`; `mode` in request is rejected.
+- Control Panel local dev routing has been aligned so AI requests follow the same prod control-plane tunnel path.
   
 Phase 3 (RAG advice with citations) is complete for current scope:
 - `POST /api/control-plane/ops/advice` implemented.
