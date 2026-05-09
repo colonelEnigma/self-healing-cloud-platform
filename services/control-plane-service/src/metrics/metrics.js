@@ -40,6 +40,13 @@ const opsAdviceTotal = new client.Counter({
   ],
 });
 
+const opsAdviceDurationMs = new client.Histogram({
+  name: "ops_advice_duration_ms",
+  help: "Latency of ops advice generation in milliseconds",
+  labelNames: ["status", "intent"],
+  buckets: [50, 100, 250, 500, 1000, 2000, 5000, 10000],
+});
+
 const observeOpsAdvice = ({
   status,
   intent,
@@ -58,8 +65,23 @@ const observeOpsAdvice = ({
   });
 };
 
+const observeOpsAdviceDuration = ({ status, intent, durationMs }) => {
+  const value = Number(durationMs);
+  if (!Number.isFinite(value) || value < 0) {
+    return;
+  }
+  opsAdviceDurationMs.observe(
+    {
+      status: status || "unknown",
+      intent: intent || "unknown",
+    },
+    value,
+  );
+};
+
 module.exports = {
   client,
   httpRequestsTotal,
   observeOpsAdvice,
+  observeOpsAdviceDuration,
 };

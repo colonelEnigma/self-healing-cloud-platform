@@ -48,7 +48,7 @@ const {
   revertScenarioExecution,
   revertAllActiveScenarioExecutions,
 } = require("../services/chaosService");
-const { observeOpsAdvice } = require("../metrics/metrics");
+const { observeOpsAdvice, observeOpsAdviceDuration } = require("../metrics/metrics");
 
 const clampInteger = (value, fallback, min, max) => {
   const parsed = Number.parseInt(value, 10);
@@ -890,6 +890,7 @@ const postAiChat = async (req, res) => {
 };
 
 const postOpsAdvice = async (req, res) => {
+  const startedAt = Date.now();
   const payload = {
     service: req.body.service,
     question: req.body.question,
@@ -901,13 +902,22 @@ const postOpsAdvice = async (req, res) => {
 
   try {
     const result = await getOpsAdvice(payload);
+    const status =
+      Array.isArray(result.warnings) && result.warnings.length > 0
+        ? "partial"
+        : "success";
     observeOpsAdvice({
-      status: "success",
+      status,
       intent: result.intent,
       confidence: result.confidence,
       citationCount: Array.isArray(result.citations) ? result.citations.length : 0,
       unknownCount: Array.isArray(result.unknowns) ? result.unknowns.length : 0,
       warningCount: Array.isArray(result.warnings) ? result.warnings.length : 0,
+    });
+    observeOpsAdviceDuration({
+      status,
+      intent: result.intent,
+      durationMs: Date.now() - startedAt,
     });
     return res.status(200).json(result);
   } catch (err) {
@@ -918,6 +928,11 @@ const postOpsAdvice = async (req, res) => {
       citationCount: 0,
       unknownCount: 1,
       warningCount: 1,
+    });
+    observeOpsAdviceDuration({
+      status: "error",
+      intent: "unknown",
+      durationMs: Date.now() - startedAt,
     });
     return res.status(502).json({
       message: "Failed to generate control-plane ops advice",

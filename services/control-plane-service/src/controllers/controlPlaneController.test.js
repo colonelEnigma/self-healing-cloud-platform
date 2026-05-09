@@ -53,6 +53,11 @@ jest.mock("../services/opsAdviceService", () => ({
   getOpsAdvice: jest.fn(),
 }));
 
+jest.mock("../metrics/metrics", () => ({
+  observeOpsAdvice: jest.fn(),
+  observeOpsAdviceDuration: jest.fn(),
+}));
+
 const {
   scaleServiceDeployment,
 } = require("../services/kubernetesService");
@@ -81,6 +86,10 @@ const {
   validateOpsAdviceRequest,
   getOpsAdvice,
 } = require("../services/opsAdviceService");
+const {
+  observeOpsAdvice,
+  observeOpsAdviceDuration,
+} = require("../metrics/metrics");
 const {
   getResilience,
   getChaosScenarios,
@@ -636,6 +645,61 @@ describe("postOpsAdvice", () => {
         evidence: expect.any(Object),
         unknowns: expect.any(Array),
         citations: expect.any(Array),
+      }),
+    );
+    expect(observeOpsAdvice).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "success",
+        intent: "recovery_plan",
+      }),
+    );
+    expect(observeOpsAdviceDuration).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "success",
+        intent: "recovery_plan",
+      }),
+    );
+  });
+
+  it("records partial status metrics when ops advice includes warnings", async () => {
+    validateOpsAdviceRequest.mockReturnValue({ valid: true });
+    getOpsAdvice.mockResolvedValue({
+      service: "payment-service",
+      namespace: "prod",
+      question: "What should I do next to stabilize?",
+      intent: "recovery_plan",
+      confidence: "medium",
+      answer: "Prioritize stabilization checks.",
+      advice: [],
+      evidence: {},
+      unknowns: [],
+      citations: [],
+      incidentContext: {},
+      warnings: ["prometheus alerts unavailable: timeout"],
+      generatedAt: "2026-05-09T11:00:00.000Z",
+      readOnly: true,
+    });
+
+    const req = {
+      body: {
+        service: "payment-service",
+        question: "What should I do next to stabilize?",
+      },
+    };
+    const res = buildResponse();
+
+    await postOpsAdvice(req, res);
+
+    expect(observeOpsAdvice).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "partial",
+        intent: "recovery_plan",
+      }),
+    );
+    expect(observeOpsAdviceDuration).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "partial",
+        intent: "recovery_plan",
       }),
     );
   });

@@ -185,6 +185,12 @@ Phase 5 progress update (2026-05-09):
   - grounded structured output fields: `answer`, `evidence`, `confidence`, `unknowns` (with backward-compatible existing fields retained)
 - Ops-advice quality observability added:
   - Prometheus counter `ops_advice_total` with bounded labels/buckets (`status`, `intent`, `confidence`, citation/unknown/warning buckets)
+- Ops-advice reliability behavior updated:
+  - strict fail-closed restored for core incident sources (`incident timeline` and `incident summaries`)
+  - request now returns `502` when those core sources are unavailable
+- Ops-advice operability polish added:
+  - Prometheus histogram `ops_advice_duration_ms` for latency by `status` and `intent`
+  - `ops_advice_total.status` now distinguishes `success`, `partial`, and `error`
 - Frontend integration checkpoint completed in `cloudpulse-ui`:
   - Admin UI now calls `POST /api/control-plane/ops/advice` in updated panels
   - Structured UI rendering for `answer + evidence + unknowns + citations` is live in updated components
