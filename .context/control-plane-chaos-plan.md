@@ -1,7 +1,7 @@
 # Control Plane Chaos Plan
 
-Last updated: 2026-05-08
-Status: Phase 0 completed; Phase 1 completed; Phase 2 implemented; Phase 3 completed. Next active phase: Phase 4
+Last updated: 2026-05-09
+Status: Phase 0 completed; Phase 1 completed; Phase 2 implemented; Phase 3 completed; Phase 4 completed. Next active phase: Phase 5
 Scope: Admin-triggered chaos scenarios and backend implementation for self-healing + analysis
 
 ## Goal
@@ -500,16 +500,16 @@ Exit criteria:
 - Similar incidents returned with score and linked outcome context.
 - Retrieval filtered by service/date/scenario metadata.
 
-Phase 4 execution status (2026-05-08):
+Phase 4 execution status (2026-05-09):
 
-- STATUS: IN PROGRESS (implementation wired, infra provisioning pending live operator execution)
+- STATUS: COMPLETE (implemented and validated in runtime)
 - Locked decisions:
   - dual-store architecture (`incident_summaries` in Postgres as source-of-truth + vector index in Qdrant)
   - vector DB target: Qdrant on AWS EC2
   - embedding provider strategy: local embedding model first, OpenAI/OpenRouter fallback via pluggable provider
   - tests deferred for initial implementation pass; manual validation first
-- Current objective:
-  - implement `GET /api/control-plane/incidents/:service/similar` with vector similarity ranking and incident metadata hydration
+- Completed objective:
+  - `GET /api/control-plane/incidents/:service/similar` now returns vector-ranked incident matches with Postgres metadata hydration.
 
 Phase 4 implementation checklist:
 
@@ -547,16 +547,28 @@ Phase 4 progress log:
   - incident analyzer now attempts embedding upsert after summary upsert (fail-soft)
   - manual backfill command added: `npm run backfill:incident-embeddings`
   - runbook added: `docs/vector-retrieval-runbook.md`
+- 2026-05-09: runtime validation and hardening completed:
+  - Qdrant on EC2 connectivity validated from EKS after SG allowlist update (`6333` from EKS node SG).
+  - OpenRouter embedding provider path validated with `qwen/qwen3-embedding-4b`.
+  - Embedding dimension aligned to `2560` and Qdrant collection confirmed at matching vector size.
+  - Qdrant collection init `409` handled as success (idempotent create behavior).
+  - Qdrant point ID format fixed to numeric incident IDs for upsert compatibility.
+  - Similar endpoint request-time sync bounded (`SIMILAR_SYNC_LIMIT`) and failure samples exposed in response.
+  - End-to-end API/UI validation successful for allowlisted services.
 
-Phase 4 validation command placeholders:
+Phase 4 validation commands (validated):
 
 1. Similar incidents request:
 - `curl "$CONTROL_PLANE_BASE/api/control-plane/incidents/payment-service/similar?limit=5" -H "Authorization: Bearer $ADMIN_JWT"`
-- Expected output: HTTP `200` with ranked `results[]` containing similarity scores and incident context.
+- Expected output: HTTP `200` with ranked `results[]` (or empty results when history is insufficient) plus `vector.syncStatus`.
 
 2. Guardrail check:
 - `curl "$CONTROL_PLANE_BASE/api/control-plane/incidents/unknown-service/similar" -H "Authorization: Bearer $ADMIN_JWT"`
 - Expected output: HTTP `400` allowlist validation error.
+
+3. Anchor validation check:
+- `curl "$CONTROL_PLANE_BASE/api/control-plane/incidents/payment-service/similar?limit=5&anchorExecutionId=ScaleToZero" -H "Authorization: Bearer $ADMIN_JWT"`
+- Expected output: HTTP `400` with message `anchorExecutionId must be an integer when provided`.
 
 ### Phase 5: MCP-Aligned Data Provider + Hardening
 

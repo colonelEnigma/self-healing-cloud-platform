@@ -1,6 +1,6 @@
 # Backend Context (Canonical)
 
-Last updated: 2026-05-08 (Phase 4 implementation in progress)
+Last updated: 2026-05-09 (Phase 4 validated)
 
 ## Purpose
 
@@ -152,7 +152,7 @@ Assumptions:
 - `docs/rollback-runbook.md`
 - `docs/control-plane-ai-lmstudio.md`
 - `docs/cloudpulse-ui-runbook.md`
-- `docs/vector-retrieval-runbook.md` (planned for Phase 4 implementation tracking)
+- `docs/vector-retrieval-runbook.md`
 - `prometheus-values.yaml`
 - `k8s/monitoring/grafana-values.yaml`
 
@@ -178,13 +178,13 @@ Phase 3 (RAG advice with citations) is complete for current scope:
 - Citation-grounded advisory output implemented.
 - Admin-only and read-only guardrails enforced.
 
-Phase 4 is now in progress with locked architecture decisions:
+Phase 4 was completed and validated with locked architecture decisions:
 - dual-store: Postgres metadata + Qdrant vector index
 - Qdrant deployment target: AWS EC2
 - embedding strategy: local model first, OpenAI/OpenRouter fallback
-- immediate next action: provision EC2 and bring up Qdrant before backend vector endpoint wiring
+- Qdrant on EC2 provisioning and network allowlisting completed for control-plane access on `6333`.
 
-Phase 4 backend wiring now implemented:
+Phase 4 backend and runtime behavior now validated:
 - New endpoint:
   - `GET /api/control-plane/incidents/:service/similar`
 - New vector/embedding modules:
@@ -195,10 +195,20 @@ Phase 4 backend wiring now implemented:
   - `src/services/similarIncidentService.js`
 - Embedding sync integration:
   - incident analyzer now performs fail-soft embedding upsert after incident summary upsert.
+- Runtime hardening updates applied during validation:
+  - Qdrant collection create `409` (already exists) is treated as success.
+  - Qdrant point IDs use numeric incident IDs for upsert compatibility.
+  - Similar endpoint request-time sync reduced and made env-tunable (`SIMILAR_SYNC_LIMIT`, default `5`) to limit UI latency.
+  - Similar endpoint includes sampled sync failure details in response (`vector.syncStatus.failures`).
 - Backfill command:
   - `npm run backfill:incident-embeddings`
 - Operational runbook:
   - `docs/vector-retrieval-runbook.md`
+
+Phase 4 validation status:
+- VERIFIED (UI + API): `GET /api/control-plane/incidents/:service/similar` returns HTTP `200` for allowlisted services.
+- VERIFIED: vector sync status reports successful upserts (`synced > 0`, `failed = 0`) after fixes.
+- VERIFIED: guardrail behavior for invalid `anchorExecutionId` (non-integer) returns HTTP `400`.
 
 ## Phase 3 Complete (Ops Advice with Citations)
 

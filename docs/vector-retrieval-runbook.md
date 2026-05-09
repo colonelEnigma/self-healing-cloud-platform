@@ -1,6 +1,6 @@
 # Vector Retrieval Runbook (Phase 4)
 
-Last updated: 2026-05-08
+Last updated: 2026-05-09
 Scope: control-plane similar incident retrieval with Postgres + Qdrant
 
 ## Architecture
@@ -76,10 +76,10 @@ Set these for `control-plane-service`:
 VECTOR_RETRIEVAL_ENABLED=true
 QDRANT_URL=http://<qdrant-host>:6333
 QDRANT_API_KEY=<optional-if-enabled>
-QDRANT_COLLECTION=incident_summaries_v1
+QDRANT_COLLECTION=incident_summaries_prod
 QDRANT_DISTANCE=Cosine
-EMBEDDING_DIMENSION=768
-EMBEDDING_PROVIDER_ORDER=local,openai,openrouter
+EMBEDDING_DIMENSION=2560
+EMBEDDING_PROVIDER_ORDER=openrouter
 
 LOCAL_EMBEDDING_BASE_URL=http://localhost:1234/v1
 LOCAL_EMBEDDING_MODEL=nomic-embed-text-v1.5
@@ -88,7 +88,8 @@ OPENAI_API_KEY=<optional-fallback>
 OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 
 OPENROUTER_API_KEY=<optional-fallback>
-OPENROUTER_EMBEDDING_MODEL=openai/text-embedding-3-small
+OPENROUTER_EMBEDDING_MODEL=qwen/qwen3-embedding-4b
+SIMILAR_SYNC_LIMIT=5
 ```
 
 ## Backfill and Sync
@@ -136,6 +137,7 @@ Expected output:
 - `anchor` object populated when summaries exist
 - `results[]` sorted by semantic score
 - `vector.embeddingProvider` shows successful provider used
+- `vector.syncStatus` includes `synced`, `failed`, and sampled `failures[]` for operator debugging
 
 Guardrail check:
 
@@ -153,3 +155,9 @@ Expected output:
   - `VECTOR_RETRIEVAL_ENABLED=false`
 - Retrieval endpoint then returns configuration-unavailable error without mutating incident metadata.
 - Existing incident timeline and ops advice endpoints continue to use Postgres-only source paths.
+
+## Known Operational Notes
+
+- If Qdrant collection already exists, create/ensure behavior is idempotent and should not fail requests.
+- If similar endpoint is slow, reduce request-time sync using `SIMILAR_SYNC_LIMIT` and run backfill separately.
+- `anchorExecutionId` must be an integer execution ID; scenario IDs like `ScaleToZero` are invalid for this query parameter.
