@@ -870,11 +870,20 @@ const postAiChat = async (req, res) => {
   } catch (err) {
     const provider = err.provider || null;
     const model = err.model || null;
+    const providerFailure =
+      err?.details?.cause ||
+      (Array.isArray(err?.details?.failures) && err.details.failures[0]?.error) ||
+      null;
+    const providerFailures = Array.isArray(err?.details?.failures)
+      ? err.details.failures
+      : null;
     return res.status(502).json({
       message: "Failed to generate Control Plane AI response",
       provider,
       model,
       error: err.message,
+      providerFailure,
+      providerFailures,
     });
   }
 };

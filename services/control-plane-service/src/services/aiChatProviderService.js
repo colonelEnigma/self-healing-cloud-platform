@@ -28,6 +28,12 @@ const sanitizeErrorMessage = (err) => {
   if (status) {
     return `upstream_http_${status}`;
   }
+  if (err?.code === "ECONNABORTED") {
+    return "timeout";
+  }
+  if (err?.name === "AbortError") {
+    return "timeout";
+  }
   if (err?.code) {
     return String(err.code);
   }
@@ -150,6 +156,7 @@ const callWithRetries = async ({ provider, messages }) => {
     provider,
     ...(lastError?.details || {}),
     cause: sanitizeErrorMessage(lastError),
+    retryAttempts: totalAttempts,
   });
 };
 

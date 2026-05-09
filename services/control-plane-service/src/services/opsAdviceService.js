@@ -7,6 +7,10 @@ const {
 } = require("../config/allowlist");
 const { getAlertsFromPrometheus } = require("./externalReadService");
 const { getIncidentTimelineByService } = require("./incidentAnalyzerService");
+const { getServiceDeploymentSummary } = require("./kubernetesService");
+const {
+  getSimilarIncidentsByService,
+} = require("./similarIncidentService");
 const {
   listIncidentSummariesByService,
 } = require("./incidentSummaryRepository");
@@ -15,6 +19,7 @@ const MAX_QUESTION_CHARACTERS = 800;
 const DEFAULT_INCIDENT_LIMIT = 1;
 const DEFAULT_LOOKBACK_MINUTES = 15;
 const MAX_CITATIONS = 6;
+const MAX_SIMILAR_INCIDENTS = 3;
 
 const DOC_SOURCES = [
   ".context/backend-context.md",
@@ -131,6 +136,118 @@ const toConfidenceLabel = (value) => {
   return "low";
 };
 
+const classifyIntent = (question) => {
+  const normalized = String(question || "").toLowerCase();
+  if (
+    /\b(root cause|why|cause|failure|failed|incident|what happened)\b/.test(
+      normalized,
+    )
+  ) {
+    return "incident_diagnosis";
+  }
+  if (/\b(next|mitigate|recover|restore|stabilize|action|step)\b/.test(normalized)) {
+    return "recovery_plan";
+  }
+  if (/\b(escalate|page|sev|severity|risk|impact)\b/.test(normalized)) {
+    return "risk_assessment";
+  }
+  if (/\b(runbook|procedure|playbook|document|docs)\b/.test(normalized)) {
+    return "runbook_lookup";
+  }
+  return "general_ops";
+};
+
+const buildClearAnswer = ({ intent, incident, latestSummary, alerts, deployment }) => {
+  const topCause = incident?.probableCauseCandidates?.[0] || null;
+  const recoveryState = incident?.recovery?.state || "unknown";
+  const outcome =
+    latestSummary?.outcome || incident?.recovery?.outcome || "unknown_outcome";
+  const alertCount = alerts.length;
+  const deploymentStatus = deployment?.status || "unknown";
+
+  if (intent === "incident_diagnosis" && topCause) {
+    return `Most likely current issue is ${topCause.label} based on recent incident evidence; recovery state is ${recoveryState} and deployment status is ${deploymentStatus}.`;
+  }
+  if (intent === "recovery_plan") {
+    return `Prioritize production stabilization checks for ${deployment?.service || "the service"}: verify live alerts, deployment health, and recent healing/audit signals before any escalation. Current recovery state is ${recoveryState}.`;
+  }
+  if (intent === "risk_assessment") {
+    return `Current operational risk is ${alertCount > 0 ? "elevated" : "moderate"} with ${alertCount} firing alert(s) and recovery outcome ${outcome}.`;
+  }
+  if (intent === "runbook_lookup") {
+    return "Use the cited runbook/document sections that match this service and incident outcome; they are ranked by lexical relevance to your question and current signals.";
+  }
+  return `Current state summary for ${deployment?.service || "service"}: deployment=${deploymentStatus}, recovery=${recoveryState}, firingAlerts=${alertCount}.`;
+};
+
+const buildUnknowns = ({ latestSummary, incident, deployment, warnings, citations }) => {
+  const unknowns = [];
+  if (!latestSummary) {
+    unknowns.push("No recent incident summary row found in incident_summaries.");
+  }
+  if (!incident?.incidents?.length) {
+    unknowns.push("No recent incident executions found in lookback window.");
+  }
+  if (!deployment) {
+    unknowns.push("Live deployment detail was unavailable from Kubernetes.");
+  }
+  if (!citations.length) {
+    unknowns.push("No matching runbook/document citations were found for this query.");
+  }
+  for (const warning of warnings) {
+    unknowns.push(warning);
+  }
+  return unknowns;
+};
+
+const buildEvidence = ({
+  deployment,
+  alerts,
+  incident,
+  latestSummary,
+  similarIncidents,
+  citations,
+}) => ({
+  liveTelemetry: {
+    deployment: deployment
+      ? {
+          service: deployment.service || deployment.name || null,
+          status: deployment.status || null,
+          desiredReplicas: deployment.desiredReplicas ?? null,
+          readyReplicas: deployment.readyReplicas ?? null,
+          unavailableReplicas: deployment.unavailableReplicas ?? null,
+        }
+      : null,
+    firingAlerts: alerts.map((alert) => ({
+      name: alert.name || alert.labels?.alertname || null,
+      severity: alert.severity || alert.labels?.severity || null,
+      activeAt: alert.activeAt || null,
+      summary: alert.summary || alert.annotations?.summary || null,
+    })),
+    incidentRecovery: incident?.recovery || null,
+  },
+  similarIncidents: similarIncidents.map((item) => ({
+    executionId: item?.incident?.executionId || null,
+    scenarioId: item?.incident?.scenarioId || null,
+    outcome: item?.incident?.outcome || null,
+    score: item?.score ?? null,
+  })),
+  docsAndRunbooks: citations.map((citation) => ({
+    path: citation.path,
+    section: citation.section,
+    excerpt: citation.excerpt,
+  })),
+  latestIncidentSummary: latestSummary
+    ? {
+        executionId: latestSummary.execution_id,
+        scenarioId: latestSummary.scenario_id,
+        outcome: latestSummary.outcome,
+        startedAt: latestSummary.started_at,
+        endedAt: latestSummary.ended_at,
+      }
+    : null,
+});
+
 const validateOpsAdviceRequest = ({ service, question }) => {
   if (!isAllowedDeployment(service)) {
     return {
@@ -191,19 +308,25 @@ const buildAdviceBullets = ({
 };
 
 const getOpsAdvice = async ({ service, question }) => {
-  const incident = await getIncidentTimelineByService({
-    service,
-    limit: DEFAULT_INCIDENT_LIMIT,
-    lookbackMinutes: DEFAULT_LOOKBACK_MINUTES,
-  });
-  const summaries = await listIncidentSummariesByService({
-    service,
-    limit: 1,
-  });
+  const trimmedQuestion = question.trim();
+  const intent = classifyIntent(trimmedQuestion);
+  const [incident, summaries, deployment] = await Promise.all([
+    getIncidentTimelineByService({
+      service,
+      limit: DEFAULT_INCIDENT_LIMIT,
+      lookbackMinutes: DEFAULT_LOOKBACK_MINUTES,
+    }),
+    listIncidentSummariesByService({
+      service,
+      limit: 1,
+    }),
+    getServiceDeploymentSummary(service).catch(() => null),
+  ]);
   const latestSummary = summaries[0] || null;
 
   let alerts = [];
   const warnings = [];
+  let similarIncidents = [];
   try {
     const allAlerts = await getAlertsFromPrometheus();
     alerts = allAlerts.filter(
@@ -211,6 +334,19 @@ const getOpsAdvice = async ({ service, question }) => {
     );
   } catch (err) {
     warnings.push(`prometheus alerts unavailable: ${err.message}`);
+  }
+  try {
+    const similarResult = await getSimilarIncidentsByService({
+      service,
+      limit: MAX_SIMILAR_INCIDENTS,
+      anchorExecutionId: null,
+    });
+    similarIncidents = similarResult.results || [];
+    if (Array.isArray(similarResult.warnings)) {
+      warnings.push(...similarResult.warnings);
+    }
+  } catch (err) {
+    warnings.push(`similar incident retrieval unavailable: ${err.message}`);
   }
 
   const advice = buildAdviceBullets({
@@ -221,18 +357,44 @@ const getOpsAdvice = async ({ service, question }) => {
   const confidence = toConfidenceLabel(incident.confidence);
   const scenarioId = incident.incidents?.[0]?.scenarioId || null;
   const citations = await buildCitations({
-    question,
+    question: trimmedQuestion,
     service,
     scenarioId,
     outcome: latestSummary?.outcome || incident.recovery?.outcome || null,
+  });
+  const clearAnswer = buildClearAnswer({
+    intent,
+    incident,
+    latestSummary,
+    alerts,
+    deployment,
+  });
+  const evidence = buildEvidence({
+    deployment,
+    alerts,
+    incident,
+    latestSummary,
+    similarIncidents,
+    citations,
+  });
+  const unknowns = buildUnknowns({
+    latestSummary,
+    incident,
+    deployment,
+    warnings,
+    citations,
   });
 
   return {
     service,
     namespace: CONTROL_PLANE_NAMESPACE,
-    question: question.trim(),
+    question: trimmedQuestion,
+    intent,
     confidence,
+    answer: clearAnswer,
     advice,
+    evidence,
+    unknowns,
     citations,
     incidentContext: {
       recovery: incident.recovery,
