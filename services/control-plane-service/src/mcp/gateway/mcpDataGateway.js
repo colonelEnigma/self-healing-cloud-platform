@@ -12,18 +12,47 @@ const { getIncidentTimelineByService } = require("../../services/incidentAnalyze
 const { listIncidentSummariesByService } = require("../../services/incidentSummaryRepository");
 
 const DOC_SOURCES = [
-  ".context/backend-context.md",
-  ".context/control-plane-chaos-plan.md",
-  "docs/rollback-runbook.md",
-  "docs/jenkins-promotion-runbook.md",
-  "docs/cloudpulse-ui-runbook.md",
-  "docs/mcp-corpus/healer-service-playbook.md",
-  "docs/mcp-corpus/grafana-playbook.md",
-  "docs/mcp-corpus/control-plane-resilience-ui-demo-manual.md",
-  "docs/mcp-corpus/debugging-playbook.md",
-  "docs/mcp-corpus/operations-playbook.md",
+  {
+    path: ".context/backend-context.md",
+    absPath: path.resolve(__dirname, "../corpus/backend-context.md"),
+  },
+  {
+    path: ".context/control-plane-chaos-plan.md",
+    absPath: path.resolve(__dirname, "../corpus/control-plane-chaos-plan.md"),
+  },
+  {
+    path: "docs/rollback-runbook.md",
+    absPath: path.resolve(__dirname, "../corpus/rollback-runbook.md"),
+  },
+  {
+    path: "docs/jenkins-promotion-runbook.md",
+    absPath: path.resolve(__dirname, "../corpus/jenkins-promotion-runbook.md"),
+  },
+  {
+    path: "docs/cloudpulse-ui-runbook.md",
+    absPath: path.resolve(__dirname, "../corpus/cloudpulse-ui-runbook.md"),
+  },
+  {
+    path: "docs/mcp-corpus/healer-service-playbook.md",
+    absPath: path.resolve(__dirname, "../corpus/healer-service-playbook.md"),
+  },
+  {
+    path: "docs/mcp-corpus/grafana-playbook.md",
+    absPath: path.resolve(__dirname, "../corpus/grafana-playbook.md"),
+  },
+  {
+    path: "docs/mcp-corpus/control-plane-resilience-ui-demo-manual.md",
+    absPath: path.resolve(__dirname, "../corpus/control-plane-resilience-ui-demo-manual.md"),
+  },
+  {
+    path: "docs/mcp-corpus/debugging-playbook.md",
+    absPath: path.resolve(__dirname, "../corpus/debugging-playbook.md"),
+  },
+  {
+    path: "docs/mcp-corpus/operations-playbook.md",
+    absPath: path.resolve(__dirname, "../corpus/operations-playbook.md"),
+  },
 ];
-const REPO_ROOT = path.resolve(__dirname, "../../../../../");
 
 const splitMarkdownSections = (content) => {
   const lines = String(content || "").split("\n");
@@ -120,12 +149,12 @@ const getDocEvidence = async ({ question, service, scenarioId, outcome, maxResul
       const queryText = [question, service, scenarioId, outcome].filter(Boolean).join(" ");
       const tokens = Array.from(new Set(tokenize(queryText)));
       const candidates = [];
-      for (const relativePath of DOC_SOURCES) {
+      for (const source of DOC_SOURCES) {
         try {
-          const content = await fs.readFile(path.join(REPO_ROOT, relativePath), "utf8");
+          const content = await fs.readFile(source.absPath, "utf8");
           for (const section of splitMarkdownSections(content)) {
             candidates.push({
-              path: relativePath,
+              path: source.path,
               section: section.heading,
               excerpt: section.text.slice(0, 280).trim(),
               score: computeTextScore(section.text, tokens),
