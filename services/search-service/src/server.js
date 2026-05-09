@@ -33,6 +33,10 @@ app.get("/metrics", async (req, res) => {
   res.end(await client.register.metrics());
 });
 
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "search-service is running" });
+});
+
 // routes
 app.use("/api/search", searchRoutes);
 
