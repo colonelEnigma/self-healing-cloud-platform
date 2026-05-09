@@ -43,6 +43,7 @@ Recent verified state:
 ## Operational Rules
 
 - Prefer Bash commands in user-facing instructions unless the user explicitly asks for PowerShell.
+- When troubleshooting, validation, or data inspection requires command output checks, provide exact runnable commands (including `jq` filters when useful), for example `| jq '.data[0].embedding | length'`.
 - Do not print, commit, or reuse secrets, including Slack webhooks, kubeconfigs, DB passwords, AWS keys, GitHub tokens, Jenkins secrets, or Kubernetes tokens.
 - Alertmanager does not expand `${SLACK_WEBHOOK_URL}` inside its config file. When applying `prometheus-values.yaml`, pass the resolved secret through Helm or use a safer secret-management approach.
 - Grafana PostgreSQL datasource credentials must come from Secret `grafana-postgres-datasource` in namespace `monitoring`; do not commit datasource credentials.
