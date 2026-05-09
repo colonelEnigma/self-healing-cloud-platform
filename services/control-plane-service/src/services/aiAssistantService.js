@@ -104,16 +104,15 @@ const compactOverview = (overview = {}) => ({
   warnings: overview.warnings || [],
 });
 
-const normalizeMode = (mode) =>
-  AI_ASSISTANT_MODES.includes(mode) ? mode : "platform-summary";
+const DEFAULT_AI_CHAT_MODE = "incident-summary";
 
 const validateAiChatRequest = ({ mode, service, question }) => {
-  if (mode && !AI_ASSISTANT_MODES.includes(mode)) {
+  if (mode != null) {
     return {
       valid: false,
       status: 400,
-      message: "Unsupported AI assistant mode",
-      allowedModes: AI_ASSISTANT_MODES,
+      message:
+        "mode is no longer supported; send only service and question in request payload",
     };
   }
 
@@ -466,7 +465,7 @@ const buildMessages = ({ mode, service, question, context }) => {
 };
 
 const chatWithAiAssistant = async ({ mode, service, question, authHeader }) => {
-  const normalizedMode = normalizeMode(mode);
+  const normalizedMode = DEFAULT_AI_CHAT_MODE;
   const { context, contextUsed, warnings } = await buildAiContext({
     mode: normalizedMode,
     service,

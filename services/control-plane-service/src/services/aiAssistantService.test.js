@@ -90,7 +90,6 @@ describe("aiAssistantService", () => {
 
   it("rejects non-allowlisted service context", () => {
     const result = service.validateAiChatRequest({
-      mode: "service-diagnostics",
       service: "inventory-service",
       question: "What is wrong?",
     });
@@ -110,6 +109,21 @@ describe("aiAssistantService", () => {
     });
   });
 
+  it("rejects explicit mode in payload", () => {
+    const result = service.validateAiChatRequest({
+      mode: "platform-summary",
+      service: "order-service",
+      question: "What happened?",
+    });
+
+    expect(result).toEqual({
+      valid: false,
+      status: 400,
+      message:
+        "mode is no longer supported; send only service and question in request payload",
+    });
+  });
+
   it("calls LM Studio with bounded live context and read-only instructions", async () => {
     postMock.mockResolvedValue({
       data: {
@@ -124,7 +138,6 @@ describe("aiAssistantService", () => {
     });
 
     const result = await service.chatWithLmStudio({
-      mode: "incident-summary",
       service: "order-service",
       question: "Why is order-service unhealthy?",
     });
