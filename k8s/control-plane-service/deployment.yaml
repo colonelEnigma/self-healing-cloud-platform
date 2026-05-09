@@ -80,6 +80,18 @@ spec:
               value: "https://openrouter.ai/api/v1"
             - name: OPENROUTER_EMBEDDING_MODEL
               value: "qwen/qwen3-embedding-4b"
+            - name: MCP_OPS_ADVICE_ENABLED
+              value: "true"
+            - name: MCP_PROVIDER_TIMEOUT_MS
+              value: "3000"
+            - name: MCP_PROVIDER_MAX_RETRIES
+              value: "1"
+            - name: MCP_PROVIDER_BACKOFF_MS
+              value: "150"
+            - name: MCP_CIRCUIT_FAILURE_THRESHOLD
+              value: "3"
+            - name: MCP_CIRCUIT_OPEN_MS
+              value: "10000"
           readinessProbe:
             httpGet:
               path: /health

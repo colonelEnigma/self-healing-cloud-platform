@@ -47,6 +47,31 @@ const opsAdviceDurationMs = new client.Histogram({
   buckets: [50, 100, 250, 500, 1000, 2000, 5000, 10000],
 });
 
+const mcpRequestsTotal = new client.Counter({
+  name: "mcp_requests_total",
+  help: "Total MCP provider requests",
+  labelNames: ["provider", "operation", "status"],
+});
+
+const mcpRequestDurationMs = new client.Histogram({
+  name: "mcp_request_duration_ms",
+  help: "Latency of MCP provider requests in milliseconds",
+  labelNames: ["provider", "operation", "status"],
+  buckets: [25, 50, 100, 250, 500, 1000, 2000, 5000, 10000],
+});
+
+const mcpFailuresTotal = new client.Counter({
+  name: "mcp_failures_total",
+  help: "Total MCP provider failures by reason",
+  labelNames: ["provider", "operation", "reason"],
+});
+
+const mcpCircuitState = new client.Gauge({
+  name: "mcp_circuit_state",
+  help: "MCP circuit state gauge by provider (0=closed,0.5=half_open,1=open)",
+  labelNames: ["provider"],
+});
+
 const observeOpsAdvice = ({
   status,
   intent,
@@ -79,9 +104,52 @@ const observeOpsAdviceDuration = ({ status, intent, durationMs }) => {
   );
 };
 
+const observeMcpRequest = ({ provider, operation, status }) => {
+  mcpRequestsTotal.inc({
+    provider: provider || "unknown",
+    operation: operation || "unknown",
+    status: status || "unknown",
+  });
+};
+
+const observeMcpRequestDuration = ({ provider, operation, status, durationMs }) => {
+  const value = Number(durationMs);
+  if (!Number.isFinite(value) || value < 0) {
+    return;
+  }
+  mcpRequestDurationMs.observe(
+    {
+      provider: provider || "unknown",
+      operation: operation || "unknown",
+      status: status || "unknown",
+    },
+    value,
+  );
+};
+
+const observeMcpFailure = ({ provider, operation, reason }) => {
+  mcpFailuresTotal.inc({
+    provider: provider || "unknown",
+    operation: operation || "unknown",
+    reason: reason || "unknown",
+  });
+};
+
+const setMcpCircuitState = ({ provider, value }) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return;
+  }
+  mcpCircuitState.set({ provider: provider || "unknown" }, numeric);
+};
+
 module.exports = {
   client,
   httpRequestsTotal,
   observeOpsAdvice,
   observeOpsAdviceDuration,
+  observeMcpRequest,
+  observeMcpRequestDuration,
+  observeMcpFailure,
+  setMcpCircuitState,
 };

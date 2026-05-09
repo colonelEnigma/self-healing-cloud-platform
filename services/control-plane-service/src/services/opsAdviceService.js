@@ -1,129 +1,21 @@
-const fs = require("fs/promises");
-const path = require("path");
 const {
   CONTROL_PLANE_NAMESPACE,
   ALLOWED_APP_DEPLOYMENTS,
   isAllowedDeployment,
 } = require("../config/allowlist");
+const { mcpConfig } = require("../config/mcp");
 const { getAlertsFromPrometheus } = require("./externalReadService");
 const { getIncidentTimelineByService } = require("./incidentAnalyzerService");
 const { getServiceDeploymentSummary } = require("./kubernetesService");
-const {
-  getSimilarIncidentsByService,
-} = require("./similarIncidentService");
-const {
-  listIncidentSummariesByService,
-} = require("./incidentSummaryRepository");
+const { getSimilarIncidentsByService } = require("./similarIncidentService");
+const { listIncidentSummariesByService } = require("./incidentSummaryRepository");
+const mcpDataGateway = require("../mcp/gateway/mcpDataGateway");
 
 const MAX_QUESTION_CHARACTERS = 800;
 const DEFAULT_INCIDENT_LIMIT = 1;
 const DEFAULT_LOOKBACK_MINUTES = 15;
 const MAX_CITATIONS = 6;
 const MAX_SIMILAR_INCIDENTS = 3;
-
-const DOC_SOURCES = [
-  ".context/backend-context.md",
-  ".context/control-plane-chaos-plan.md",
-  "docs/rollback-runbook.md",
-  "docs/jenkins-promotion-runbook.md",
-  "docs/cloudpulse-ui-runbook.md",
-];
-
-const REPO_ROOT = path.resolve(__dirname, "../../..");
-
-const splitMarkdownSections = (content) => {
-  const lines = String(content || "").split("\n");
-  const sections = [];
-  let current = { heading: "Document", lines: [] };
-
-  for (const line of lines) {
-    if (/^#{1,3}\s+/.test(line)) {
-      if (current.lines.length) {
-        sections.push({
-          heading: current.heading,
-          text: current.lines.join("\n").trim(),
-        });
-      }
-      current = {
-        heading: line.replace(/^#{1,3}\s+/, "").trim(),
-        lines: [],
-      };
-      continue;
-    }
-    current.lines.push(line);
-  }
-
-  if (current.lines.length) {
-    sections.push({
-      heading: current.heading,
-      text: current.lines.join("\n").trim(),
-    });
-  }
-
-  return sections.filter((section) => section.text);
-};
-
-const tokenize = (text) =>
-  String(text || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, " ")
-    .split(/\s+/)
-    .filter((token) => token.length > 2);
-
-const computeTextScore = (text, tokens) => {
-  const corpus = String(text || "").toLowerCase();
-  let score = 0;
-  for (const token of tokens) {
-    if (corpus.includes(token)) {
-      score += 1;
-    }
-  }
-  return score;
-};
-
-const loadCitationCandidates = async () => {
-  const candidates = [];
-
-  for (const relativePath of DOC_SOURCES) {
-    const absolutePath = path.join(REPO_ROOT, relativePath);
-    try {
-      const content = await fs.readFile(absolutePath, "utf8");
-      const sections = splitMarkdownSections(content);
-      for (const section of sections) {
-        candidates.push({
-          path: relativePath,
-          section: section.heading,
-          text: section.text,
-        });
-      }
-    } catch (err) {
-      // best-effort citation source loading
-    }
-  }
-
-  return candidates;
-};
-
-const buildCitations = ({ question, service, scenarioId, outcome }) => {
-  const queryText = [question, service, scenarioId, outcome].filter(Boolean).join(" ");
-  const tokens = Array.from(new Set(tokenize(queryText)));
-
-  return loadCitationCandidates().then((candidates) =>
-    candidates
-      .map((item) => ({
-        ...item,
-        score: computeTextScore(item.text, tokens),
-      }))
-      .filter((item) => item.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, MAX_CITATIONS)
-      .map((item) => ({
-        path: item.path,
-        section: item.section,
-        excerpt: item.text.slice(0, 280).trim(),
-      })),
-  );
-};
 
 const toConfidenceLabel = (value) => {
   const score = Number(value || 0);
@@ -138,11 +30,7 @@ const toConfidenceLabel = (value) => {
 
 const classifyIntent = (question) => {
   const normalized = String(question || "").toLowerCase();
-  if (
-    /\b(root cause|why|cause|failure|failed|incident|what happened)\b/.test(
-      normalized,
-    )
-  ) {
+  if (/\b(root cause|why|cause|failure|failed|incident|what happened)\b/.test(normalized)) {
     return "incident_diagnosis";
   }
   if (/\b(next|mitigate|recover|restore|stabilize|action|step)\b/.test(normalized)) {
@@ -160,8 +48,7 @@ const classifyIntent = (question) => {
 const buildClearAnswer = ({ intent, incident, latestSummary, alerts, deployment }) => {
   const topCause = incident?.probableCauseCandidates?.[0] || null;
   const recoveryState = incident?.recovery?.state || "unknown";
-  const outcome =
-    latestSummary?.outcome || incident?.recovery?.outcome || "unknown_outcome";
+  const outcome = latestSummary?.outcome || incident?.recovery?.outcome || "unknown_outcome";
   const alertCount = alerts.length;
   const deploymentStatus = deployment?.status || "unknown";
 
@@ -200,14 +87,7 @@ const buildUnknowns = ({ latestSummary, incident, deployment, warnings, citation
   return unknowns;
 };
 
-const buildEvidence = ({
-  deployment,
-  alerts,
-  incident,
-  latestSummary,
-  similarIncidents,
-  citations,
-}) => ({
+const buildEvidence = ({ deployment, alerts, incident, latestSummary, similarIncidents, citations }) => ({
   liveTelemetry: {
     deployment: deployment
       ? {
@@ -259,11 +139,7 @@ const validateOpsAdviceRequest = ({ service, question }) => {
     };
   }
 
-  if (
-    typeof question !== "string" ||
-    !question.trim() ||
-    question.length > MAX_QUESTION_CHARACTERS
-  ) {
+  if (typeof question !== "string" || !question.trim() || question.length > MAX_QUESTION_CHARACTERS) {
     return {
       valid: false,
       status: 400,
@@ -274,18 +150,12 @@ const validateOpsAdviceRequest = ({ service, question }) => {
   return { valid: true };
 };
 
-const buildAdviceBullets = ({
-  incident,
-  latestSummary,
-  activeAlerts,
-}) => {
+const buildAdviceBullets = ({ incident, latestSummary, activeAlerts }) => {
   const bullets = [];
 
   if (incident?.probableCauseCandidates?.length) {
     const top = incident.probableCauseCandidates[0];
-    bullets.push(
-      `Primary signal: ${top.label} (${Math.round(top.score * 100)}% evidence alignment).`,
-    );
+    bullets.push(`Primary signal: ${top.label} (${Math.round(top.score * 100)}% evidence alignment).`);
   }
 
   if (latestSummary?.outcome === "service_recovered") {
@@ -297,9 +167,7 @@ const buildAdviceBullets = ({
   }
 
   if (activeAlerts.length > 0) {
-    bullets.push(
-      `Prometheus still shows ${activeAlerts.length} firing alert(s) for this service; prioritize alert-specific runbook checks.`,
-    );
+    bullets.push(`Prometheus still shows ${activeAlerts.length} firing alert(s) for this service; prioritize alert-specific runbook checks.`);
   } else {
     bullets.push("No firing Prometheus alerts currently match this service.");
   }
@@ -307,68 +175,95 @@ const buildAdviceBullets = ({
   return bullets;
 };
 
-const getOpsAdvice = async ({ service, question }) => {
-  const trimmedQuestion = question.trim();
-  const intent = classifyIntent(trimmedQuestion);
-  const [incident, summaries, deployment] = await Promise.all([
+const getCoreContextFallback = ({ service }) =>
+  Promise.all([
     getIncidentTimelineByService({
       service,
       limit: DEFAULT_INCIDENT_LIMIT,
       lookbackMinutes: DEFAULT_LOOKBACK_MINUTES,
     }),
-    listIncidentSummariesByService({
+    listIncidentSummariesByService({ service, limit: 1 }),
+  ]).then(([incident, summaries]) => ({ incident, summaries }));
+
+const getCoreContextMcp = ({ service, traceId }) =>
+  Promise.all([
+    mcpDataGateway.getIncidentTimeline({
       service,
-      limit: 1,
+      limit: DEFAULT_INCIDENT_LIMIT,
+      lookbackMinutes: DEFAULT_LOOKBACK_MINUTES,
+      traceId,
     }),
-    getServiceDeploymentSummary(service).catch(() => null),
-  ]);
+    mcpDataGateway.getIncidentSummaries({ service, limit: 1, traceId }),
+  ]).then(([incident, summaries]) => ({ incident, summaries }));
+
+const getOpsAdvice = async ({ service, question }) => {
+  const trimmedQuestion = question.trim();
+  const intent = classifyIntent(trimmedQuestion);
+  const traceId = `ops-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const warnings = [];
+
+  const { incident, summaries } = mcpConfig.opsAdviceEnabled
+    ? await getCoreContextMcp({ service, traceId })
+    : await getCoreContextFallback({ service });
   const latestSummary = summaries[0] || null;
 
-  let alerts = [];
-  const warnings = [];
-  let similarIncidents = [];
-  try {
-    const allAlerts = await getAlertsFromPrometheus();
-    alerts = allAlerts.filter(
-      (alert) => alert.service === service && alert.state === "firing",
-    );
-  } catch (err) {
-    warnings.push(`prometheus alerts unavailable: ${err.message}`);
-  }
-  try {
-    const similarResult = await getSimilarIncidentsByService({
+  const [deployment, similarResult] = await Promise.all([
+    (mcpConfig.opsAdviceEnabled
+      ? mcpDataGateway.getDeploymentState({ service, traceId })
+      : getServiceDeploymentSummary(service)
+    ).catch(() => null),
+    getSimilarIncidentsByService({
       service,
       limit: MAX_SIMILAR_INCIDENTS,
       anchorExecutionId: null,
-    });
-    similarIncidents = similarResult.results || [];
-    if (Array.isArray(similarResult.warnings)) {
-      warnings.push(...similarResult.warnings);
+    }).catch((err) => {
+      warnings.push(`similar incident retrieval unavailable: ${err.message}`);
+      return { results: [], warnings: [] };
+    }),
+  ]);
+
+  let alerts = [];
+  if (mcpConfig.opsAdviceEnabled) {
+    try {
+      alerts = (await mcpDataGateway.getAlerts({ service, traceId })).filter(
+        (alert) => alert.state === "firing",
+      );
+    } catch (err) {
+      warnings.push(`prometheus alerts unavailable: ${err.message}`);
     }
-  } catch (err) {
-    warnings.push(`similar incident retrieval unavailable: ${err.message}`);
+  } else {
+    try {
+      const allAlerts = await getAlertsFromPrometheus();
+      alerts = allAlerts.filter((alert) => alert.service === service && alert.state === "firing");
+    } catch (err) {
+      warnings.push(`prometheus alerts unavailable: ${err.message}`);
+    }
   }
 
-  const advice = buildAdviceBullets({
-    incident,
-    latestSummary,
-    activeAlerts: alerts,
-  });
+  const similarIncidents = similarResult.results || [];
+  if (Array.isArray(similarResult.warnings)) {
+    warnings.push(...similarResult.warnings);
+  }
+
+  let citations = [];
+  if (mcpConfig.opsAdviceEnabled) {
+    try {
+      citations = await mcpDataGateway.getDocEvidence({
+        question: trimmedQuestion,
+        service,
+        scenarioId: incident.incidents?.[0]?.scenarioId || null,
+        outcome: latestSummary?.outcome || incident.recovery?.outcome || null,
+        maxResults: MAX_CITATIONS,
+        traceId,
+      });
+    } catch (err) {
+      warnings.push(`docs retrieval unavailable: ${err.message}`);
+    }
+  }
+
+  const advice = buildAdviceBullets({ incident, latestSummary, activeAlerts: alerts });
   const confidence = toConfidenceLabel(incident.confidence);
-  const scenarioId = incident.incidents?.[0]?.scenarioId || null;
-  const citations = await buildCitations({
-    question: trimmedQuestion,
-    service,
-    scenarioId,
-    outcome: latestSummary?.outcome || incident.recovery?.outcome || null,
-  });
-  const clearAnswer = buildClearAnswer({
-    intent,
-    incident,
-    latestSummary,
-    alerts,
-    deployment,
-  });
+  const clearAnswer = buildClearAnswer({ intent, incident, latestSummary, alerts, deployment });
   const evidence = buildEvidence({
     deployment,
     alerts,
@@ -377,13 +272,7 @@ const getOpsAdvice = async ({ service, question }) => {
     similarIncidents,
     citations,
   });
-  const unknowns = buildUnknowns({
-    latestSummary,
-    incident,
-    deployment,
-    warnings,
-    citations,
-  });
+  const unknowns = buildUnknowns({ latestSummary, incident, deployment, warnings, citations });
 
   return {
     service,

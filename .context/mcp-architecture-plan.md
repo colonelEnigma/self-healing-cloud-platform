@@ -1,7 +1,7 @@
 # MCP Architecture Plan (Control Plane)
 
 Last updated: 2026-05-09
-Status: Draft approved for implementation start in next session
+Status: Implemented in `services/control-plane-service` (flag-controlled; default disabled)
 Scope: End-to-end MCP integration for `services/control-plane-service` read paths (no mutation)
 
 ## 1) Goal
@@ -190,3 +190,8 @@ Implementation is complete when all are true:
 5. Guardrails (admin/prod/allowlist/read-only) remain enforced.
 6. Feature-flag rollback path is verified.
 
+Implementation note (2026-05-09):
+- MCP client/gateway/adapters/contracts/errors are implemented under `src/mcp/`.
+- `POST /api/control-plane/ops/advice` now routes through MCP when `MCP_OPS_ADVICE_ENABLED=true`; fallback path remains active when `false`.
+- Core dependencies (`incident timeline`, `incident summaries`) remain strict fail-closed; non-core dependencies degrade with warnings.
+- Added MCP observability metrics and structured provider logs (`traceId`, `provider`, `operation`, `status`, `latencyMs`).
