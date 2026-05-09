@@ -23,7 +23,7 @@ const getClient = () =>
     },
   });
 
-const toPointId = (incidentId) => `incident-${incidentId}`;
+const toPointId = (incidentId) => Number(incidentId);
 
 const ensureCollection = async () => {
   if (!isVectorConfigured()) {
@@ -58,6 +58,13 @@ const ensureCollection = async () => {
 const upsertIncidentVector = async ({ incidentSummary, vector }) => {
   await ensureCollection();
 
+  const pointId = toPointId(incidentSummary.id);
+  if (!Number.isInteger(pointId) || pointId <= 0) {
+    throw new VectorStoreError("Incident id is invalid for Qdrant point id", {
+      incidentId: incidentSummary.id,
+    });
+  }
+
   try {
     const client = getClient();
     await client.put(
@@ -65,7 +72,7 @@ const upsertIncidentVector = async ({ incidentSummary, vector }) => {
       {
         points: [
           {
-            id: toPointId(incidentSummary.id),
+            id: pointId,
             vector,
             payload: {
               incident_id: incidentSummary.id,
@@ -85,6 +92,7 @@ const upsertIncidentVector = async ({ incidentSummary, vector }) => {
     throw new VectorStoreError("Failed to upsert incident vector", {
       message: err.message,
       status: err.response?.status,
+      qdrant: err.response?.data || null,
     });
   }
 };
