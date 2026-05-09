@@ -83,7 +83,7 @@ spec:
             - name: MCP_OPS_ADVICE_ENABLED
               value: "true"
             - name: MCP_PROVIDER_TIMEOUT_MS
-              value: "3000"
+              value: "20000"
             - name: MCP_PROVIDER_MAX_RETRIES
               value: "1"
             - name: MCP_PROVIDER_BACKOFF_MS

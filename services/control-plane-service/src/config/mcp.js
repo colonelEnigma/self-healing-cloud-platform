@@ -10,7 +10,7 @@ const toPositiveInt = (value, fallback, min = 1, max = 60000) => {
 
 const mcpConfig = {
   opsAdviceEnabled: MCP_OPS_ADVICE_ENABLED,
-  providerTimeoutMs: toPositiveInt(process.env.MCP_PROVIDER_TIMEOUT_MS, 3000, 100, 120000),
+  providerTimeoutMs: toPositiveInt(process.env.MCP_PROVIDER_TIMEOUT_MS, 20000, 100, 120000),
   providerMaxRetries: toPositiveInt(process.env.MCP_PROVIDER_MAX_RETRIES, 1, 0, 5),
   providerBackoffMs: toPositiveInt(process.env.MCP_PROVIDER_BACKOFF_MS, 150, 0, 5000),
   circuitFailureThreshold: toPositiveInt(process.env.MCP_CIRCUIT_FAILURE_THRESHOLD, 3, 1, 20),
