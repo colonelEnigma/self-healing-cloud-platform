@@ -48,6 +48,18 @@ spec:
               value: "http://localhost:3001"
             - name: LM_STUDIO_MODEL
               value: "qwen3.5-9b-deepseek-v4-flash"
+            - name: AI_CHAT_PROVIDER_ORDER
+              value: "openrouter,lmstudio"
+            - name: AI_CHAT_MAX_RETRIES
+              value: "1"
+            - name: AI_CHAT_RETRY_BACKOFF_MS
+              value: "250"
+            - name: OPENROUTER_CHAT_BASE_URL
+              value: "https://openrouter.ai/api/v1"
+            - name: OPENROUTER_CHAT_MODEL
+              value: "google/gemma-3-4b-it"
+            - name: OPENROUTER_CHAT_TIMEOUT_MS
+              value: "30000"
             - name: VECTOR_RETRIEVAL_ENABLED
               value: "true"
             - name: QDRANT_URL

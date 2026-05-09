@@ -27,7 +27,7 @@ const {
 } = require("../config/resilience");
 const {
   validateAiChatRequest,
-  chatWithLmStudio,
+  chatWithAiAssistant,
   getAiAssistantStatus,
 } = require("../services/aiAssistantService");
 const {
@@ -862,16 +862,18 @@ const postAiChat = async (req, res) => {
   }
 
   try {
-    const result = await chatWithLmStudio({
+    const result = await chatWithAiAssistant({
       ...payload,
       authHeader: req.headers.authorization,
     });
     return res.status(200).json(result);
   } catch (err) {
+    const provider = err.provider || null;
+    const model = err.model || null;
     return res.status(502).json({
       message: "Failed to generate Control Plane AI response",
-      provider: "lm-studio",
-      model: process.env.LM_STUDIO_MODEL || "gemma3:4b",
+      provider,
+      model,
       error: err.message,
     });
   }

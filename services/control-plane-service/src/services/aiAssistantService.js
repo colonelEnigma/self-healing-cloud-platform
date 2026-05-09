@@ -6,12 +6,13 @@ const {
 } = require("../config/allowlist");
 const {
   AI_ASSISTANT_MODES,
-  LM_STUDIO_BASE_URL,
-  LM_STUDIO_MODEL,
-  LM_STUDIO_TIMEOUT_MS,
   CONTROL_PLANE_CONTEXT_BASE_URL,
   AI_CONTEXT_LIMITS,
 } = require("../config/ai");
+const {
+  runAiChatWithFallback,
+  getAiProviderStatus,
+} = require("./aiChatProviderService");
 const {
   getAllowlistedDeploymentSummaries,
   getServiceDeploymentSummary,
@@ -29,11 +30,6 @@ const {
   HEALER_SERVICE_DOWN_POLICY,
   MANUAL_SCALE_GUARD,
 } = require("../config/resilience");
-
-const lmStudioClient = axios.create({
-  baseURL: LM_STUDIO_BASE_URL.replace(/\/$/, ""),
-  timeout: LM_STUDIO_TIMEOUT_MS,
-});
 
 const contextClient = CONTROL_PLANE_CONTEXT_BASE_URL
   ? axios.create({
@@ -469,7 +465,7 @@ const buildMessages = ({ mode, service, question, context }) => {
   ];
 };
 
-const chatWithLmStudio = async ({ mode, service, question, authHeader }) => {
+const chatWithAiAssistant = async ({ mode, service, question, authHeader }) => {
   const normalizedMode = normalizeMode(mode);
   const { context, contextUsed, warnings } = await buildAiContext({
     mode: normalizedMode,
@@ -483,23 +479,14 @@ const chatWithLmStudio = async ({ mode, service, question, authHeader }) => {
     context,
   });
 
-  const response = await lmStudioClient.post("/chat/completions", {
-    model: LM_STUDIO_MODEL,
-    messages,
-    temperature: 0.2,
-    max_tokens: 700,
-  });
-  const answer = response.data?.choices?.[0]?.message?.content;
-
-  if (!answer) {
-    throw new Error("LM Studio returned no assistant message");
-  }
+  const aiResult = await runAiChatWithFallback({ messages });
 
   return {
-    model: LM_STUDIO_MODEL,
+    provider: aiResult.provider,
+    model: aiResult.model,
     mode: normalizedMode,
     service: service || null,
-    answer,
+    answer: aiResult.answer,
     contextUsed,
     warnings,
     generatedAt: new Date().toISOString(),
@@ -507,10 +494,7 @@ const chatWithLmStudio = async ({ mode, service, question, authHeader }) => {
 };
 
 const getAiAssistantStatus = () => ({
-  provider: "lm-studio",
-  model: LM_STUDIO_MODEL,
-  baseUrlConfigured: Boolean(process.env.LM_STUDIO_BASE_URL),
-  defaultBaseUrl: process.env.LM_STUDIO_BASE_URL ? null : LM_STUDIO_BASE_URL,
+  ...getAiProviderStatus(),
   contextBaseUrlConfigured: Boolean(CONTROL_PLANE_CONTEXT_BASE_URL),
   contextBaseUrl: CONTROL_PLANE_CONTEXT_BASE_URL || null,
   modes: AI_ASSISTANT_MODES,
@@ -520,6 +504,7 @@ const getAiAssistantStatus = () => ({
 
 module.exports = {
   validateAiChatRequest,
-  chatWithLmStudio,
+  chatWithAiAssistant,
+  chatWithLmStudio: chatWithAiAssistant,
   getAiAssistantStatus,
 };
