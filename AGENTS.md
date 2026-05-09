@@ -49,6 +49,8 @@ Recent verified state:
 - Grafana persistence is currently disabled; commit dashboard changes to Git instead of relying on UI-only edits.
 - Jenkins rollback and promotion operations are documented in `docs/rollback-runbook.md` and `docs/jenkins-promotion-runbook.md`.
 - Use Git-controlled prod promotion through `jenkins/promotion.env`; do not rely on Jenkins UI approval buttons unless that flow is explicitly restored and tested.
+- Do not suggest quick patches or fast operational fixes by default (for example direct hotfix-style `kubectl set image` changes). Prefer canonical Git + pipeline flow unless the user explicitly asks for an emergency/break-glass fix.
+- This rule applies to direct Kubernetes runtime mutations as well (including `kubectl set image`, `kubectl set env`, manual scale/patch/apply against live workloads) unless explicitly requested.
 - Use `.context/backend-context.md` as the canonical backend/shared context. Frontend live integration plan and runbook references are maintained in the `cloudpulse-ui` repo.
 - For Control Plane work, do not grant secret access, delete permissions, namespace permissions, pod deletion, Kafka mutation, PostgreSQL application-data mutation, or broad cluster permissions.
 - If Helm conflicts with Alertmanager after manual `kubectl edit`, use the documented `--server-side=true --force-conflicts` approach.

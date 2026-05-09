@@ -38,6 +38,10 @@ const {
   getOpsAdvice,
 } = require("../services/opsAdviceService");
 const {
+  getSimilarIncidentsByService: getSimilarIncidentsByServiceData,
+  SimilarIncidentError,
+} = require("../services/similarIncidentService");
+const {
   ChaosServiceError,
   getScenarioCatalog,
   triggerScenarioExecution,
@@ -505,6 +509,41 @@ const getIncidentTimelineByService = async (req, res) => {
   }
 };
 
+const getSimilarIncidentsByService = async (req, res) => {
+  const { service } = req.params;
+  const limit = clampInteger(req.query.limit, 5, 1, 20);
+  const anchorExecutionId =
+    req.query.anchorExecutionId == null || req.query.anchorExecutionId === ""
+      ? null
+      : Number.parseInt(req.query.anchorExecutionId, 10);
+
+  if (req.query.anchorExecutionId != null && !Number.isInteger(anchorExecutionId)) {
+    return res.status(400).json({
+      message: "anchorExecutionId must be an integer when provided",
+    });
+  }
+
+  try {
+    const data = await getSimilarIncidentsByServiceData({
+      service,
+      limit,
+      anchorExecutionId,
+    });
+    return res.status(200).json(data);
+  } catch (err) {
+    if (err instanceof SimilarIncidentError) {
+      return res.status(err.statusCode).json({
+        message: err.message,
+        ...(err.details || {}),
+      });
+    }
+    return res.status(500).json({
+      message: `Failed to retrieve similar incidents for ${service}`,
+      error: err.message,
+    });
+  }
+};
+
 const postScaleAction = async (req, res) => {
   const namespace = req.body.namespace;
   const service = req.body.service;
@@ -871,6 +910,7 @@ module.exports = {
   getServiceLogsHandler,
   getServiceEventsHandler,
   getIncidentTimelineByService,
+  getSimilarIncidentsByService,
   postScaleAction,
   getControlPlaneActions,
   getChaosScenarios,

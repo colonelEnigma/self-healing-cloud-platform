@@ -13,6 +13,9 @@ const {
   upsertIncidentSummaryByExecutionId,
   listIncidentSummariesByService,
 } = require("./incidentSummaryRepository");
+const {
+  upsertSingleIncidentEmbedding,
+} = require("./incidentVectorSyncService");
 
 const DEFAULT_LOOKBACK_MINUTES = 30;
 const DEFAULT_MAX_INCIDENTS = 10;
@@ -400,7 +403,7 @@ const computeIncidentForExecution = async ({
     warnings,
   };
 
-  await upsertIncidentSummaryByExecutionId({
+  const persistedSummary = await upsertIncidentSummaryByExecutionId({
     executionId: incident.executionId,
     service: incident.service,
     scenarioId: incident.scenarioId,
@@ -413,6 +416,12 @@ const computeIncidentForExecution = async ({
     outcome: incident.outcome,
     timelineJson: incident.timeline,
   });
+
+  try {
+    await upsertSingleIncidentEmbedding(persistedSummary);
+  } catch (err) {
+    warnings.push(`incident embedding upsert failed: ${err.message}`);
+  }
 
   return incident;
 };

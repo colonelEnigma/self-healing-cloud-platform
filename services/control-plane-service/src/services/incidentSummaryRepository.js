@@ -192,10 +192,46 @@ const getIncidentSummaryByExecutionId = async (executionId) => {
   return result.rows[0] || null;
 };
 
+const listIncidentSummariesByIds = async (ids = []) => {
+  const normalized = ids
+    .map((value) => Number.parseInt(value, 10))
+    .filter((value) => Number.isInteger(value));
+
+  if (!normalized.length) {
+    return [];
+  }
+
+  const result = await pool.query(
+    `
+      SELECT
+        id,
+        execution_id,
+        service,
+        scenario_id,
+        started_at,
+        ended_at,
+        symptom,
+        probable_cause,
+        confidence,
+        healer_action,
+        outcome,
+        timeline_json,
+        created_at,
+        updated_at
+      FROM incident_summaries
+      WHERE id = ANY($1::int[])
+    `,
+    [normalized],
+  );
+
+  return result.rows;
+};
+
 module.exports = {
   createIncidentSummary,
   updateIncidentSummaryByExecutionId,
   upsertIncidentSummaryByExecutionId,
   listIncidentSummariesByService,
   getIncidentSummaryByExecutionId,
+  listIncidentSummariesByIds,
 };

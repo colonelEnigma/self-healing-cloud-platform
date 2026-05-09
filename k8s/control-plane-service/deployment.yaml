@@ -47,7 +47,33 @@ spec:
             - name: CORS_ORIGIN
               value: "http://localhost:3001"
             - name: LM_STUDIO_MODEL
-              value: "google/gemma-3-4b"
+              value: "qwen3.5-9b-deepseek-v4-flash"
+            - name: VECTOR_RETRIEVAL_ENABLED
+              value: "true"
+            - name: QDRANT_URL
+              value: "http://192.168.29.86:6333"
+            - name: QDRANT_COLLECTION
+              value: "incident_summaries_prod"
+            - name: QDRANT_DISTANCE
+              value: "Cosine"
+            - name: EMBEDDING_DIMENSION
+              value: "768"
+            - name: EMBEDDING_PROVIDER_ORDER
+              value: "openrouter"
+            - name: OPENROUTER_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: control-plane-secrets
+                  key: OPENROUTER_API_KEY
+                  optional: true
+            - name: OPENROUTER_EMBEDDING_BASE_URL
+              value: "https://openrouter.ai/api/v1"
+            - name: OPENROUTER_EMBEDDING_MODEL
+              value: "google/gemma-4-31b-it"
+            - name: LOCAL_EMBEDDING_BASE_URL
+              value: "http://172.31.32.1:1234/v1"
+            - name: LOCAL_EMBEDDING_MODEL
+              value: "qwen3.5-9b-deepseek-v4-flash"
           readinessProbe:
             httpGet:
               path: /health

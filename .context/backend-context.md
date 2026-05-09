@@ -1,6 +1,6 @@
 # Backend Context (Canonical)
 
-Last updated: 2026-05-08 (Phase 3 complete)
+Last updated: 2026-05-08 (Phase 4 implementation in progress)
 
 ## Purpose
 
@@ -183,6 +183,22 @@ Phase 4 is now in progress with locked architecture decisions:
 - Qdrant deployment target: AWS EC2
 - embedding strategy: local model first, OpenAI/OpenRouter fallback
 - immediate next action: provision EC2 and bring up Qdrant before backend vector endpoint wiring
+
+Phase 4 backend wiring now implemented:
+- New endpoint:
+  - `GET /api/control-plane/incidents/:service/similar`
+- New vector/embedding modules:
+  - `src/config/vector.js`
+  - `src/services/embeddingProviderService.js`
+  - `src/services/vectorStoreService.js`
+  - `src/services/incidentVectorSyncService.js`
+  - `src/services/similarIncidentService.js`
+- Embedding sync integration:
+  - incident analyzer now performs fail-soft embedding upsert after incident summary upsert.
+- Backfill command:
+  - `npm run backfill:incident-embeddings`
+- Operational runbook:
+  - `docs/vector-retrieval-runbook.md`
 
 ## Phase 3 Complete (Ops Advice with Citations)
 

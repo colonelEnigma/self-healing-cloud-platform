@@ -502,7 +502,7 @@ Exit criteria:
 
 Phase 4 execution status (2026-05-08):
 
-- STATUS: IN PROGRESS
+- STATUS: IN PROGRESS (implementation wired, infra provisioning pending live operator execution)
 - Locked decisions:
   - dual-store architecture (`incident_summaries` in Postgres as source-of-truth + vector index in Qdrant)
   - vector DB target: Qdrant on AWS EC2
@@ -538,6 +538,15 @@ Phase 4 progress log:
 
 - 2026-05-08: Phase 4 plan finalized with dual-store and Qdrant-on-EC2 direction.
 - 2026-05-08: Next step queued: provision AWS EC2 and deploy Qdrant.
+- 2026-05-08: backend vector integration implemented in `control-plane-service`:
+  - vector config module added (`src/config/vector.js`)
+  - embedding provider abstraction added with ordered fallback (`local -> openai -> openrouter`)
+  - Qdrant adapter added for collection init, vector upsert, and similarity search
+  - incident embedding sync pipeline added (single upsert + per-service backfill)
+  - `GET /api/control-plane/incidents/:service/similar` implemented (admin-only, prod-only, allowlist-only, read-only)
+  - incident analyzer now attempts embedding upsert after summary upsert (fail-soft)
+  - manual backfill command added: `npm run backfill:incident-embeddings`
+  - runbook added: `docs/vector-retrieval-runbook.md`
 
 Phase 4 validation command placeholders:
 
