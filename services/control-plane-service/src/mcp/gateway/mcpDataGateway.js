@@ -17,8 +17,13 @@ const DOC_SOURCES = [
   "docs/rollback-runbook.md",
   "docs/jenkins-promotion-runbook.md",
   "docs/cloudpulse-ui-runbook.md",
+  "docs/mcp-corpus/healer-service-playbook.md",
+  "docs/mcp-corpus/grafana-playbook.md",
+  "docs/mcp-corpus/control-plane-resilience-ui-demo-manual.md",
+  "docs/mcp-corpus/debugging-playbook.md",
+  "docs/mcp-corpus/operations-playbook.md",
 ];
-const REPO_ROOT = path.resolve(__dirname, "../../../..");
+const REPO_ROOT = path.resolve(__dirname, "../../../../../");
 
 const splitMarkdownSections = (content) => {
   const lines = String(content || "").split("\n");
