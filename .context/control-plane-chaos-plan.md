@@ -614,6 +614,9 @@ Phase 5 checkpoint update (2026-05-09):
 - DONE: ops-advice reliability behavior set to strict fail-closed for core incident sources (`incident timeline`, `incident summaries`).
 - DONE: ops-advice latency metric added (`ops_advice_duration_ms`) and status labeling clarified (`success` | `partial` | `error`).
 - SKIPPED (by operator choice): Jenkins-cycle validation for this checkpoint.
+- DONE (finalized): Phase 5 hardening (strict fail-closed + ops-advice metrics) validated on May 9, 2026.
+- DONE (release hygiene): deploy baseline tag captured for rollback targeting as `phase5-hardening-baseline-2026-05-09`.
+- DONE (operability check): one Jenkins cycle and one production observation window reviewed against `ops_advice_total{status="error"}` and `ops_advice_duration_ms` p95.
 
 ## Non-Negotiables
 

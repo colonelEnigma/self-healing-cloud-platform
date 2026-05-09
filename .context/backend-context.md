@@ -196,6 +196,9 @@ Phase 5 progress update (2026-05-09):
   - Structured UI rendering for `answer + evidence + unknowns + citations` is live in updated components
 - Phase 5 checkpoint status: COMPLETE for implemented scope (docs/tests/UI integration/metrics).
 - Explicitly skipped for this checkpoint: Jenkins-cycle validation (by operator choice).
+- Final checkpoint note (completed): Phase 5 hardening (strict fail-closed + ops-advice metrics) validated on May 9, 2026.
+- Deploy baseline note (completed): baseline tag recorded for rollback targeting as `phase5-hardening-baseline-2026-05-09`.
+- Monitoring completion note (completed): one Jenkins cycle and one production observation window were monitored with focus on `ops_advice_total{status="error"}` and `ops_advice_duration_ms` p95.
   
 Phase 3 (RAG advice with citations) is complete for current scope:
 - `POST /api/control-plane/ops/advice` implemented.
