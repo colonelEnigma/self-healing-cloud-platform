@@ -92,6 +92,44 @@ const computeTextScore = (text, tokens) => {
   return score;
 };
 
+const isRunbookPath = (docPath) =>
+  docPath === "docs/rollback-runbook.md" ||
+  docPath === "docs/jenkins-promotion-runbook.md" ||
+  docPath.startsWith("docs/mcp-corpus/");
+
+const getSourceWeight = ({ intent, path: docPath }) => {
+  if (intent !== "runbook_lookup") {
+    return 0;
+  }
+  if (docPath === "docs/rollback-runbook.md") {
+    return 40;
+  }
+  if (docPath === "docs/jenkins-promotion-runbook.md") {
+    return 35;
+  }
+  if (docPath.startsWith("docs/mcp-corpus/")) {
+    return 20;
+  }
+  if (docPath.startsWith(".context/")) {
+    return -15;
+  }
+  return 0;
+};
+
+const sortByRank = (a, b) => {
+  if (b.rankScore !== a.rankScore) {
+    return b.rankScore - a.rankScore;
+  }
+  if (b.score !== a.score) {
+    return b.score - a.score;
+  }
+  const pathCmp = String(a.path || "").localeCompare(String(b.path || ""));
+  if (pathCmp !== 0) {
+    return pathCmp;
+  }
+  return String(a.section || "").localeCompare(String(b.section || ""));
+};
+
 const getDeploymentState = async ({ service, traceId }) => {
   const payload = await runProviderOperation({
     provider: "k8s",
@@ -139,7 +177,7 @@ const getIncidentSummaries = async ({ service, limit, traceId }) => {
   return toIncidentSummaries(payload);
 };
 
-const getDocEvidence = async ({ question, service, scenarioId, outcome, maxResults, traceId }) => {
+const getDocEvidence = async ({ question, service, scenarioId, outcome, maxResults, traceId, intent }) => {
   const payload = await runProviderOperation({
     provider: "docs",
     operation: "getDocEvidence",
@@ -149,25 +187,44 @@ const getDocEvidence = async ({ question, service, scenarioId, outcome, maxResul
       const queryText = [question, service, scenarioId, outcome].filter(Boolean).join(" ");
       const tokens = Array.from(new Set(tokenize(queryText)));
       const candidates = [];
+      const fallbackRunbookCandidates = [];
       for (const source of DOC_SOURCES) {
         try {
           const content = await fs.readFile(source.absPath, "utf8");
           for (const section of splitMarkdownSections(content)) {
-            candidates.push({
+            const lexicalScore = computeTextScore(section.text, tokens);
+            const weightedScore = lexicalScore + getSourceWeight({ intent, path: source.path });
+            const candidate = {
               path: source.path,
               section: section.heading,
               excerpt: section.text.slice(0, 280).trim(),
-              score: computeTextScore(section.text, tokens),
-            });
+              score: lexicalScore,
+              rankScore: weightedScore,
+            };
+            candidates.push(candidate);
+            if (intent === "runbook_lookup" && isRunbookPath(source.path)) {
+              fallbackRunbookCandidates.push(candidate);
+            }
           }
         } catch (_err) {
           // docs retrieval is best-effort by design
         }
       }
-      return candidates
+      const matched = candidates
         .filter((item) => item.score > 0)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, maxResults);
+        .sort(sortByRank)
+        .slice(0, maxResults)
+        .map(({ rankScore: _rankScore, ...item }) => item);
+
+      if (intent === "runbook_lookup" && matched.length === 0) {
+        const fallback = fallbackRunbookCandidates
+          .sort(sortByRank)
+          .slice(0, maxResults)
+          .map(({ rankScore: _rankScore, ...item }) => item);
+        return fallback;
+      }
+
+      return matched;
     },
   });
   return toDocEvidence(payload);

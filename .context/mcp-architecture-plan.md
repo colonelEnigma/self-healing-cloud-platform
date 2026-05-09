@@ -195,3 +195,4 @@ Implementation note (2026-05-09):
 - `POST /api/control-plane/ops/advice` now routes through MCP when `MCP_OPS_ADVICE_ENABLED=true`; fallback path remains active when `false`.
 - Core dependencies (`incident timeline`, `incident summaries`) remain strict fail-closed; non-core dependencies degrade with warnings.
 - Added MCP observability metrics and structured provider logs (`traceId`, `provider`, `operation`, `status`, `latencyMs`).
+- For `intent=runbook_lookup`, docs retrieval now applies deterministic source weighting (rollback/promotion and `docs/mcp-corpus/*` preferred; `.context/*` down-ranked) plus non-empty runbook fallback citations with low-confidence warning when lexical match is absent.

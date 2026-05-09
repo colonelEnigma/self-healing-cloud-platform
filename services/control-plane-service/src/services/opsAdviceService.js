@@ -253,9 +253,19 @@ const getOpsAdvice = async ({ service, question }) => {
         service,
         scenarioId: incident.incidents?.[0]?.scenarioId || null,
         outcome: latestSummary?.outcome || incident.recovery?.outcome || null,
+        intent,
         maxResults: MAX_CITATIONS,
         traceId,
       });
+      if (
+        intent === "runbook_lookup" &&
+        citations.length > 0 &&
+        citations.every((citation) => Number(citation.score || 0) === 0)
+      ) {
+        warnings.push(
+          "runbook_lookup fallback citations were returned with low lexical confidence; verify against live service state before acting.",
+        );
+      }
     } catch (err) {
       warnings.push(`docs retrieval unavailable: ${err.message}`);
     }

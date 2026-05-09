@@ -69,4 +69,42 @@ describe("getOpsAdvice MCP mode", () => {
     );
     expect(result.warnings).toEqual(expect.arrayContaining([expect.stringContaining("docs retrieval unavailable")]));
   });
+
+  it("adds low-confidence warning when runbook_lookup uses fallback citations", async () => {
+    jest.doMock("./similarIncidentService", () => ({
+      getSimilarIncidentsByService: jest.fn().mockResolvedValue({ results: [], warnings: [] }),
+    }));
+    jest.doMock("../mcp/gateway/mcpDataGateway", () => ({
+      getIncidentTimeline: jest.fn().mockResolvedValue({
+        service: "payment-service",
+        incidents: [{ scenarioId: "ScaleToZero" }],
+        confidence: 0.4,
+        probableCauseCandidates: [],
+        recovery: { state: "in_progress" },
+      }),
+      getIncidentSummaries: jest.fn().mockResolvedValue([]),
+      getDeploymentState: jest.fn().mockResolvedValue(null),
+      getAlerts: jest.fn().mockResolvedValue([]),
+      getDocEvidence: jest.fn().mockResolvedValue([
+        {
+          path: "docs/rollback-runbook.md",
+          section: "Document",
+          excerpt: "fallback",
+          score: 0,
+        },
+      ]),
+    }));
+
+    const { getOpsAdvice } = require("./opsAdviceService");
+    const result = await getOpsAdvice({
+      service: "payment-service",
+      question: "show runbook procedure for rollback",
+    });
+
+    expect(result.intent).toBe("runbook_lookup");
+    expect(result.citations.length).toBeGreaterThan(0);
+    expect(result.warnings).toEqual(
+      expect.arrayContaining([expect.stringContaining("low lexical confidence")]),
+    );
+  });
 });
