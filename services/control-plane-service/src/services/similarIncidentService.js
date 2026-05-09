@@ -25,6 +25,11 @@ class SimilarIncidentError extends Error {
 }
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+const REQUEST_TIME_SYNC_LIMIT = Math.min(
+  Math.max(Number.parseInt(process.env.SIMILAR_SYNC_LIMIT || "5", 10) || 5, 1),
+  20,
+);
+const FAILURE_SAMPLE_LIMIT = 3;
 
 const resolveAnchorSummary = async ({ service, anchorExecutionId }) => {
   if (Number.isInteger(anchorExecutionId)) {
@@ -84,7 +89,7 @@ const getSimilarIncidentsByService = async ({
 
   const syncStatus = await syncIncidentSummariesForService({
     service,
-    limit: 100,
+    limit: REQUEST_TIME_SYNC_LIMIT,
   });
 
   const anchorText = buildIncidentEmbeddingText(anchor);
@@ -164,6 +169,7 @@ const getSimilarIncidentsByService = async ({
       syncStatus: {
         synced: syncStatus.synced,
         failed: syncStatus.failed,
+        failures: (syncStatus.failures || []).slice(0, FAILURE_SAMPLE_LIMIT),
       },
     },
     warnings,
@@ -174,4 +180,3 @@ module.exports = {
   SimilarIncidentError,
   getSimilarIncidentsByService,
 };
-
