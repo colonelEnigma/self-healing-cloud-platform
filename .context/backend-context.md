@@ -1,6 +1,6 @@
 # Backend Context (Canonical)
 
-Last updated: 2026-05-09 (Phase 5 in progress)
+Last updated: 2026-05-09 (Phase 5 checkpoint updated)
 
 ## Purpose
 
@@ -170,8 +170,8 @@ Assumptions:
   - Response shape includes `service`, `generatedAt`, `timeline`, `probableCauseCandidates`, `confidence`, `recovery`.
   - No-data behavior: HTTP `200` with empty `timeline`/`probableCauseCandidates` and `recovery.state = "no_incidents"`.
 - Next queued work from chaos plan:
-  - Phase 5 hardening completion and docs/tests finalization.
-  - Phase 5 end-cap: upgrade `POST /api/control-plane/ops/advice` to hybrid LLM synthesis (intent-aware + live telemetry + similar incidents + docs citations) for complex question handling.
+  - Phase 5 remaining hardening items after current checkpoint.
+  - Additional ops-advice evidence rendering polish and monitoring-driven tuning.
 
 Phase 5 progress update (2026-05-09):
 - AI chat provider abstraction is implemented with OpenRouter + ordered fallback framework.
@@ -183,6 +183,13 @@ Phase 5 progress update (2026-05-09):
   - intent-aware routing for operator questions
   - retrieval fusion across live telemetry, similar incidents, and docs/runbook citations
   - grounded structured output fields: `answer`, `evidence`, `confidence`, `unknowns` (with backward-compatible existing fields retained)
+- Ops-advice quality observability added:
+  - Prometheus counter `ops_advice_total` with bounded labels/buckets (`status`, `intent`, `confidence`, citation/unknown/warning buckets)
+- Frontend integration checkpoint completed in `cloudpulse-ui`:
+  - Admin UI now calls `POST /api/control-plane/ops/advice` in updated panels
+  - Structured UI rendering for `answer + evidence + unknowns + citations` is live in updated components
+- Phase 5 checkpoint status: COMPLETE for implemented scope (docs/tests/UI integration/metrics).
+- Explicitly skipped for this checkpoint: Jenkins-cycle validation (by operator choice).
   
 Phase 3 (RAG advice with citations) is complete for current scope:
 - `POST /api/control-plane/ops/advice` implemented.

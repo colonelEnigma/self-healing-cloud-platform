@@ -1,7 +1,7 @@
 # Control Plane Chaos Plan
 
 Last updated: 2026-05-09
-Status: Phase 0 completed; Phase 1 completed; Phase 2 implemented; Phase 3 completed; Phase 4 completed. Next active phase: Phase 5
+Status: Phase 0 completed; Phase 1 completed; Phase 2 implemented; Phase 3 completed; Phase 4 completed; Phase 5 checkpoint completed (implemented scope)
 Scope: Admin-triggered chaos scenarios and backend implementation for self-healing + analysis
 
 ## Goal
@@ -600,6 +600,18 @@ Exit criteria:
 - Error handling is stable under partial source failures.
 - Operational runbook is updated for support/demo use.
 - `POST /api/control-plane/ops/advice` can answer complex operational questions with grounded, non-generic responses tied to live evidence and citations.
+
+Phase 5 checkpoint update (2026-05-09):
+
+- DONE: AI chat error hardening with sanitized provider failure details in `502` responses (`providerFailure`, `providerFailures`).
+- DONE: `POST /api/control-plane/ops/advice` end-cap start implementation:
+  - intent-aware routing
+  - retrieval fusion (live telemetry + similar incidents + docs/runbooks)
+  - grounded output fields (`answer`, `evidence`, `confidence`, `unknowns`) with backward-compatible legacy fields retained.
+- DONE: backend contract tests and docs updates completed for new response contracts.
+- DONE: frontend integration in `cloudpulse-ui` updated to render `answer + evidence + unknowns + citations` cleanly in active advice panels.
+- DONE: ops-advice observability added via bounded Prometheus metric `ops_advice_total`.
+- SKIPPED (by operator choice): Jenkins-cycle validation for this checkpoint.
 
 ## Non-Negotiables
 
