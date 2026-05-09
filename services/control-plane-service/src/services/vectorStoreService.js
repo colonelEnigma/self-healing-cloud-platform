@@ -44,6 +44,10 @@ const ensureCollection = async () => {
     });
     collectionInitialized = true;
   } catch (err) {
+    if (err.response?.status === 409) {
+      collectionInitialized = true;
+      return;
+    }
     throw new VectorStoreError("Failed to initialize Qdrant collection", {
       message: err.message,
       status: err.response?.status,
@@ -143,4 +147,3 @@ module.exports = {
   upsertIncidentVector,
   searchSimilarIncidentVectors,
 };
-
