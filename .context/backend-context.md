@@ -9,6 +9,7 @@ Single source of truth for backend/shared project context, implementation status
 Related references:
 - Frontend-only plan (do not merge here): `.context/PlanFrontendShadcn.md`
 - Chaos implementation plan/source of truth: `.context/control-plane-chaos-plan.md`
+- MCP architecture source of truth: `.context/mcp-architecture-plan.md`
 - Repository operational guardrails: `AGENTS.md`
 
 ## Current Platform State

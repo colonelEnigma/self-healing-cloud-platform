@@ -3,6 +3,7 @@
 Last updated: 2026-05-09
 Status: Phase 0 completed; Phase 1 completed; Phase 2 implemented; Phase 3 completed; Phase 4 completed; Phase 5 checkpoint completed (implemented scope)
 Scope: Admin-triggered chaos scenarios and backend implementation for self-healing + analysis
+Related MCP architecture reference: `.context/mcp-architecture-plan.md`
 
 ## Goal
 
