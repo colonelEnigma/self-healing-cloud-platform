@@ -46,18 +46,16 @@ spec:
               value: "http://healer-service.default.svc.cluster.local:7000"
             - name: CORS_ORIGIN
               value: "http://localhost:3001"
-            - name: LM_STUDIO_MODEL
-              value: "qwen3.5-9b-deepseek-v4-flash"
             - name: AI_CHAT_PROVIDER_ORDER
-              value: "openrouter,lmstudio"
+              value: "openrouter"
             - name: AI_CHAT_MAX_RETRIES
-              value: "1"
+              value: "2"
             - name: AI_CHAT_RETRY_BACKOFF_MS
-              value: "250"
+              value: "500"
             - name: OPENROUTER_CHAT_BASE_URL
               value: "https://openrouter.ai/api/v1"
             - name: OPENROUTER_CHAT_MODEL
-              value: "google/gemma-3-4b-it"
+              value: "openrouter/auto"
             - name: OPENROUTER_CHAT_TIMEOUT_MS
               value: "30000"
             - name: VECTOR_RETRIEVAL_ENABLED
@@ -82,10 +80,6 @@ spec:
               value: "https://openrouter.ai/api/v1"
             - name: OPENROUTER_EMBEDDING_MODEL
               value: "qwen/qwen3-embedding-4b"
-            - name: LOCAL_EMBEDDING_BASE_URL
-              value: "http://172.31.32.1:1234/v1"
-            - name: LOCAL_EMBEDDING_MODEL
-              value: "qwen3.5-9b-deepseek-v4-flash"
           readinessProbe:
             httpGet:
               path: /health

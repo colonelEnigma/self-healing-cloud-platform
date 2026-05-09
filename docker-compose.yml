@@ -141,34 +141,6 @@ services:
       - postgres
       - kafka
 
-  control-plane-service:
-    build: ./services/control-plane-service
-    image: control-plane-service:local
-    container_name: control-plane-service
-    ports:
-      - "7100:7100"
-    environment:
-      PORT: 7100
-      JWT_SECRET: my_super_secret_key
-      CORS_ORIGIN: http://localhost:3001
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: admin
-      DB_PASSWORD: admin
-      DB_NAME: controlplanedb_local
-      PROMETHEUS_BASE_URL: http://prometheus:9090
-      HEALER_BASE_URL: http://healer-service:7000
-      ORDER_SERVICE_BASE_URL: http://order-service:3003
-      LM_STUDIO_BASE_URL: http://host.docker.internal:1234/v1
-      LM_STUDIO_MODEL: google/gemma-3-4b
-      LM_STUDIO_TIMEOUT_MS: 120000
-      CONTROL_PLANE_CONTEXT_BASE_URL: http://host.docker.internal:18080/api/control-plane
-    depends_on:
-      - postgres
-      - user-service
-      - order-service
-      - prometheus
-
   prometheus:
     image: prom/prometheus
     container_name: prometheus
