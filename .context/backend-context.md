@@ -178,6 +178,11 @@ Phase 5 progress update (2026-05-09):
 - Current prod direction is OpenRouter-only ordering for reliability in `monitoring`.
 - `POST /api/control-plane/ai/chat` now uses payload contract `service + question`; `mode` in request is rejected.
 - Control Panel local dev routing has been aligned so AI requests follow the same prod control-plane tunnel path.
+- AI chat error hardening added: sanitized provider failure details are included in `502` responses (`providerFailure`, `providerFailures`) without exposing secrets.
+- `POST /api/control-plane/ops/advice` Phase 5 end-cap start is implemented:
+  - intent-aware routing for operator questions
+  - retrieval fusion across live telemetry, similar incidents, and docs/runbook citations
+  - grounded structured output fields: `answer`, `evidence`, `confidence`, `unknowns` (with backward-compatible existing fields retained)
   
 Phase 3 (RAG advice with citations) is complete for current scope:
 - `POST /api/control-plane/ops/advice` implemented.
@@ -227,8 +232,16 @@ Request body:
 
 Response shape:
 - `service`, `namespace`, `question`
+- `intent` (`incident_diagnosis` | `recovery_plan` | `risk_assessment` | `runbook_lookup` | `general_ops`)
 - `confidence` (`low` | `medium` | `high`)
+- `answer` (clear grounded summary)
 - `advice` (string array)
+- `evidence`:
+  - `liveTelemetry` (deployment, firingAlerts, incidentRecovery)
+  - `similarIncidents` (executionId/scenarioId/outcome/score)
+  - `docsAndRunbooks` (citation-derived evidence entries)
+  - `latestIncidentSummary`
+- `unknowns` (explicit known gaps/unavailable inputs)
 - `citations` (`path`, `section`, `excerpt`)
 - `incidentContext` (recovery + probable causes + latest summary)
 - `warnings`, `generatedAt`, `readOnly`

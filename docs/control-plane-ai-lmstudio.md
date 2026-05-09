@@ -55,6 +55,110 @@ Notes:
 }
 ```
 
+## AI Error Response Shape (Provider Failure, Sanitized)
+
+`POST /api/control-plane/ai/chat` returns `502` with sanitized provider failure details when all providers fail:
+
+```json
+{
+  "message": "Failed to generate Control Plane AI response",
+  "provider": "openrouter",
+  "model": "openrouter/auto",
+  "error": "No chat provider succeeded",
+  "providerFailure": "upstream_http_429",
+  "providerFailures": [
+    { "provider": "openrouter", "error": "upstream_http_429" },
+    { "provider": "lmstudio", "error": "timeout" }
+  ]
+}
+```
+
+Notes:
+- `providerFailure` and `providerFailures` are sanitized and must not include secrets/tokens.
+- Existing fields remain for backward compatibility.
+
+## Ops Advice Response Shape (Phase 5 End-Cap Start)
+
+`POST /api/control-plane/ops/advice`
+
+```json
+{
+  "service": "payment-service",
+  "namespace": "prod",
+  "question": "What should I do next to stabilize this incident?",
+  "intent": "recovery_plan",
+  "confidence": "medium",
+  "answer": "Prioritize production stabilization checks for payment-service...",
+  "advice": [
+    "Primary signal: ...",
+    "Incident is still active; monitor recovery progression and avoid concurrent manual mutations.",
+    "Prometheus still shows 1 firing alert(s) for this service; prioritize alert-specific runbook checks."
+  ],
+  "evidence": {
+    "liveTelemetry": {
+      "deployment": {
+        "service": "payment-service",
+        "status": "degraded",
+        "desiredReplicas": 1,
+        "readyReplicas": 0,
+        "unavailableReplicas": 1
+      },
+      "firingAlerts": [
+        {
+          "name": "ServiceDown",
+          "severity": "critical",
+          "activeAt": "2026-05-09T10:45:00.000Z",
+          "summary": "Payment service down"
+        }
+      ],
+      "incidentRecovery": {
+        "state": "in_progress",
+        "outcome": "degradation_active",
+        "by": "unknown"
+      }
+    },
+    "similarIncidents": [
+      {
+        "executionId": 102,
+        "scenarioId": "ScaleToZero",
+        "outcome": "service_recovered",
+        "score": 0.79
+      }
+    ],
+    "docsAndRunbooks": [
+      {
+        "path": "docs/rollback-runbook.md",
+        "section": "Rollback Steps",
+        "excerpt": "..."
+      }
+    ],
+    "latestIncidentSummary": {
+      "executionId": 102,
+      "scenarioId": "ScaleToZero",
+      "outcome": "service_recovered",
+      "startedAt": "2026-05-09T10:40:00.000Z",
+      "endedAt": "2026-05-09T10:44:00.000Z"
+    }
+  },
+  "unknowns": [],
+  "citations": [
+    {
+      "path": "docs/rollback-runbook.md",
+      "section": "Rollback Steps",
+      "excerpt": "..."
+    }
+  ],
+  "incidentContext": {
+    "recovery": { "state": "in_progress" },
+    "probableCauseCandidates": [],
+    "summary": null
+  },
+  "warnings": [],
+  "generatedAt": "2026-05-09T10:50:00.000Z",
+  "readOnly": true
+}
+```
+
 ## Troubleshooting
 
 1. `Failed to generate Control Plane AI response` with `No chat provider succeeded`

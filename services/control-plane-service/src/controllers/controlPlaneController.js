@@ -48,6 +48,7 @@ const {
   revertScenarioExecution,
   revertAllActiveScenarioExecutions,
 } = require("../services/chaosService");
+const { observeOpsAdvice } = require("../metrics/metrics");
 
 const clampInteger = (value, fallback, min, max) => {
   const parsed = Number.parseInt(value, 10);
@@ -900,8 +901,24 @@ const postOpsAdvice = async (req, res) => {
 
   try {
     const result = await getOpsAdvice(payload);
+    observeOpsAdvice({
+      status: "success",
+      intent: result.intent,
+      confidence: result.confidence,
+      citationCount: Array.isArray(result.citations) ? result.citations.length : 0,
+      unknownCount: Array.isArray(result.unknowns) ? result.unknowns.length : 0,
+      warningCount: Array.isArray(result.warnings) ? result.warnings.length : 0,
+    });
     return res.status(200).json(result);
   } catch (err) {
+    observeOpsAdvice({
+      status: "error",
+      intent: "unknown",
+      confidence: "unknown",
+      citationCount: 0,
+      unknownCount: 1,
+      warningCount: 1,
+    });
     return res.status(502).json({
       message: "Failed to generate control-plane ops advice",
       error: err.message,

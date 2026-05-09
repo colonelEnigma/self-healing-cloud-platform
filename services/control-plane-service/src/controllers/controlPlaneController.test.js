@@ -42,6 +42,17 @@ jest.mock("../services/incidentAnalyzerService", () => ({
   getIncidentTimelineByService: jest.fn(),
 }));
 
+jest.mock("../services/aiAssistantService", () => ({
+  validateAiChatRequest: jest.fn(),
+  chatWithAiAssistant: jest.fn(),
+  getAiAssistantStatus: jest.fn(),
+}));
+
+jest.mock("../services/opsAdviceService", () => ({
+  validateOpsAdviceRequest: jest.fn(),
+  getOpsAdvice: jest.fn(),
+}));
+
 const {
   scaleServiceDeployment,
 } = require("../services/kubernetesService");
@@ -63,6 +74,14 @@ const {
   getIncidentTimelineByService,
 } = require("../services/incidentAnalyzerService");
 const {
+  validateAiChatRequest,
+  chatWithAiAssistant,
+} = require("../services/aiAssistantService");
+const {
+  validateOpsAdviceRequest,
+  getOpsAdvice,
+} = require("../services/opsAdviceService");
+const {
   getResilience,
   getChaosScenarios,
   getIncidentTimelineByService: getIncidentTimelineByServiceHandler,
@@ -70,6 +89,8 @@ const {
   postRevertChaosScenario,
   postRevertAllChaosScenarios,
   postScaleAction,
+  postAiChat,
+  postOpsAdvice,
 } = require("./controlPlaneController");
 
 const buildResponse = () => {
@@ -498,5 +519,124 @@ describe("getIncidentTimelineByService", () => {
       message: "Failed to build incident timeline for payment-service",
       error: "prometheus temporarily unavailable",
     });
+  });
+});
+
+describe("postAiChat", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("returns sanitized provider failure details on provider error", async () => {
+    validateAiChatRequest.mockReturnValue({ valid: true });
+    const err = new Error("No chat provider succeeded");
+    err.provider = "openrouter";
+    err.model = "openrouter/auto";
+    err.details = {
+      cause: "upstream_http_429",
+      failures: [
+        { provider: "openrouter", error: "upstream_http_429" },
+        { provider: "lmstudio", error: "timeout" },
+      ],
+    };
+    chatWithAiAssistant.mockRejectedValue(err);
+
+    const req = {
+      headers: { authorization: "Bearer admin-token" },
+      body: {
+        service: "payment-service",
+        question: "why is service degraded?",
+      },
+    };
+    const res = buildResponse();
+
+    await postAiChat(req, res);
+
+    expect(validateAiChatRequest).toHaveBeenCalledWith({
+      mode: undefined,
+      service: "payment-service",
+      question: "why is service degraded?",
+    });
+    expect(res.status).toHaveBeenCalledWith(502);
+    expect(res.json).toHaveBeenCalledWith({
+      message: "Failed to generate Control Plane AI response",
+      provider: "openrouter",
+      model: "openrouter/auto",
+      error: "No chat provider succeeded",
+      providerFailure: "upstream_http_429",
+      providerFailures: [
+        { provider: "openrouter", error: "upstream_http_429" },
+        { provider: "lmstudio", error: "timeout" },
+      ],
+    });
+  });
+});
+
+describe("postOpsAdvice", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("returns structured grounded advice fields", async () => {
+    validateOpsAdviceRequest.mockReturnValue({ valid: true });
+    getOpsAdvice.mockResolvedValue({
+      service: "payment-service",
+      namespace: "prod",
+      question: "What should I do next to stabilize?",
+      intent: "recovery_plan",
+      confidence: "medium",
+      answer: "Prioritize stabilization checks.",
+      advice: ["Incident is still active."],
+      evidence: {
+        liveTelemetry: {
+          deployment: { service: "payment-service", status: "degraded" },
+          firingAlerts: [{ name: "ServiceDown", severity: "critical" }],
+          incidentRecovery: { state: "in_progress" },
+        },
+        similarIncidents: [],
+        docsAndRunbooks: [],
+        latestIncidentSummary: null,
+      },
+      unknowns: [],
+      citations: [],
+      incidentContext: {
+        recovery: { state: "in_progress" },
+        probableCauseCandidates: [],
+        summary: null,
+      },
+      warnings: [],
+      generatedAt: "2026-05-09T11:00:00.000Z",
+      readOnly: true,
+    });
+
+    const req = {
+      body: {
+        service: "payment-service",
+        question: "What should I do next to stabilize?",
+      },
+    };
+    const res = buildResponse();
+
+    await postOpsAdvice(req, res);
+
+    expect(validateOpsAdviceRequest).toHaveBeenCalledWith({
+      service: "payment-service",
+      question: "What should I do next to stabilize?",
+    });
+    expect(getOpsAdvice).toHaveBeenCalledWith({
+      service: "payment-service",
+      question: "What should I do next to stabilize?",
+    });
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        service: "payment-service",
+        intent: "recovery_plan",
+        answer: "Prioritize stabilization checks.",
+        evidence: expect.any(Object),
+        unknowns: expect.any(Array),
+        citations: expect.any(Array),
+      }),
+    );
   });
 });
