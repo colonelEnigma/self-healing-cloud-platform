@@ -587,12 +587,19 @@ Deliverables:
  - docs/runbooks corpus
 2. Rate limits, retry policy, and error normalization
 3. Integration tests and runbook updates
+4. End-of-phase `ops/advice` hybrid LLM synthesis upgrade:
+ - intent-aware question routing (for example readiness-probe failure vs recovery checklist vs comparison)
+ - retrieval fusion across live signals (logs/events/alerts/deployments), similar incidents, and docs/runbooks
+ - provider-abstracted answer generation (OpenRouter primary with LM Studio fallback)
+ - evidence-linked response fields (`advice`, `probable_causes`, `next_checks`, `citations`, `confidence`, `unknowns`)
+ - strict read-only policy enforcement and claim-to-evidence grounding checks
 
 Exit criteria:
 
 - End-to-end flow works: trigger -> analyze -> advise -> revert.
 - Error handling is stable under partial source failures.
 - Operational runbook is updated for support/demo use.
+- `POST /api/control-plane/ops/advice` can answer complex operational questions with grounded, non-generic responses tied to live evidence and citations.
 
 ## Non-Negotiables
 

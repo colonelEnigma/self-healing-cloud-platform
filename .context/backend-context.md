@@ -172,6 +172,7 @@ Assumptions:
 - Next queued phases from chaos plan:
   - Phase 4: Similar incident retrieval (vector-ready layer)
   - Phase 5: MCP-aligned provider hardening
+  - Phase 5 end-cap: upgrade `POST /api/control-plane/ops/advice` to hybrid LLM synthesis (intent-aware + live telemetry + similar incidents + docs citations) for complex question handling.
   
 Phase 3 (RAG advice with citations) is complete for current scope:
 - `POST /api/control-plane/ops/advice` implemented.
