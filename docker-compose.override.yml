@@ -1,8 +1,25 @@
 services:
   control-plane-service:
+    build: ./services/control-plane-service
+    image: control-plane-service:local
+    container_name: control-plane-service
+    ports:
+      - "7100:7100"
     environment:
+      PORT: 7100
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: admin
+      DB_PASSWORD: admin
+      DB_NAME: controlplanedb_local
+      JWT_SECRET: my_super_secret_key
+      PROMETHEUS_BASE_URL: http://prometheus:9090
+      HEALER_BASE_URL: http://healer-service:7000
       KUBECONFIG: /kube/config
       AWS_PROFILE: default
     volumes:
       - C:/Users/ranja/.kube/config:/kube/config:ro
       - C:/Users/ranja/.aws:/root/.aws:ro
+    depends_on:
+      - postgres
+      - prometheus
