@@ -29,6 +29,10 @@ related:
 > [!warning]
 > Do not use this rollback path for Kafka, PostgreSQL, PVCs, namespaces, Prometheus, Grafana, Alertmanager, or shared infrastructure.
 
+## Control Plane Ops Advice Note
+
+When `POST /api/control-plane/ops/advice` returns `intent=runbook_lookup`, citations can include a low-confidence fallback warning if lexical matching is sparse. Treat those citations as guidance only and verify against live deployment, alerts, and rollout state before taking action.
+
 ## Flow
 
 ```text

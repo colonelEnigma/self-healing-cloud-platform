@@ -80,4 +80,27 @@ describe("mcpDataGateway getDocEvidence intent-aware ranking", () => {
     expect(results.length).toBeGreaterThan(0);
     expect(results[0].path).toBe(".context/backend-context.md");
   });
+
+  it("boosts runbook synonyms for jenkins promote phrasing", async () => {
+    const gateway = loadGatewayWithCorpus((absPath) => {
+      if (absPath.includes("jenkins-promotion-runbook.md")) {
+        return "# Promotion\npipeline promotion workflow";
+      }
+      if (absPath.includes("backend-context.md")) {
+        return "# Context\npipeline pipeline pipeline notes";
+      }
+      return "# Doc\n";
+    });
+
+    const results = await gateway.getDocEvidence({
+      question: "what is the jenkins promote flow for prod",
+      service: "order-service",
+      intent: "runbook_lookup",
+      maxResults: 2,
+      traceId: "t-4",
+    });
+
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].path).toBe("docs/jenkins-promotion-runbook.md");
+  });
 });

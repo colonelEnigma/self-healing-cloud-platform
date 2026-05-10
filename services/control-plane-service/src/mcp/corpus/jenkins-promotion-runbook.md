@@ -29,6 +29,10 @@ related:
 > [!warning]
 > Do not use Jenkins UI approval buttons for this flow. Prod approval is represented by reviewing, committing, and pushing `jenkins/promotion.env`.
 
+## Control Plane Ops Advice Note
+
+When `POST /api/control-plane/ops/advice` returns `intent=runbook_lookup`, citations can include a low-confidence fallback warning if lexical matching is sparse. Treat those citations as guidance only and verify live prod deployment health, alerts, and rollout status before acting.
+
 ## Flow
 
 ```text

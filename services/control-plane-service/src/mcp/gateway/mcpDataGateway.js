@@ -92,6 +92,43 @@ const computeTextScore = (text, tokens) => {
   return score;
 };
 
+const RUNBOOK_TOKEN_BOOSTS = {
+  rollback: ["rollback", "revert", "restore", "known-good", "image", "tag"],
+  revert: ["rollback", "revert", "restore"],
+  restore: ["rollback", "revert", "restore"],
+  promote: ["promote", "promotion", "jenkins", "prod", "release"],
+  promotion: ["promote", "promotion", "jenkins", "prod", "release"],
+  jenkins: ["jenkins", "promote", "promotion", "pipeline"],
+};
+
+const expandTokensForIntent = ({ tokens, intent, queryText }) => {
+  if (intent !== "runbook_lookup") {
+    return tokens;
+  }
+
+  const expanded = new Set(tokens);
+  for (const token of tokens) {
+    const boosts = RUNBOOK_TOKEN_BOOSTS[token];
+    if (Array.isArray(boosts)) {
+      for (const boostedToken of boosts) {
+        expanded.add(boostedToken);
+      }
+    }
+  }
+
+  const normalizedQuery = String(queryText || "").toLowerCase();
+  if (normalizedQuery.includes("rollback env")) {
+    ["rollback", "restore", "image", "tag", "env"].forEach((token) => expanded.add(token));
+  }
+  if (normalizedQuery.includes("jenkins promote")) {
+    ["jenkins", "promote", "promotion", "prod", "pipeline"].forEach((token) =>
+      expanded.add(token),
+    );
+  }
+
+  return Array.from(expanded);
+};
+
 const isRunbookPath = (docPath) =>
   docPath === "docs/rollback-runbook.md" ||
   docPath === "docs/jenkins-promotion-runbook.md" ||
@@ -185,7 +222,8 @@ const getDocEvidence = async ({ question, service, scenarioId, outcome, maxResul
     config: mcpConfig,
     executor: async () => {
       const queryText = [question, service, scenarioId, outcome].filter(Boolean).join(" ");
-      const tokens = Array.from(new Set(tokenize(queryText)));
+      const baseTokens = Array.from(new Set(tokenize(queryText)));
+      const tokens = expandTokensForIntent({ tokens: baseTokens, intent, queryText });
       const candidates = [];
       const fallbackRunbookCandidates = [];
       for (const source of DOC_SOURCES) {
