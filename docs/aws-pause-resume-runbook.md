@@ -118,7 +118,34 @@ Wait until nodes are ready:
 kubectl get nodes -w
 ```
 
-## Step 3: Restore Workloads
+## Step 3: Restore Core Dependencies First (`default`)
+
+Bring up core dependencies before DB bootstrap:
+
+```bash
+kubectl scale deploy -n default kafka --replicas=1
+kubectl scale deploy -n default zookeeper --replicas=1
+kubectl scale deploy -n default postgres --replicas=1 || true
+kubectl scale statefulset -n default postgres-postgresql --replicas=1 || true
+kubectl get pods -n default -w
+```
+
+## Step 4: Ensure App Databases Exist (Manual)
+
+Create missing app databases explicitly:
+
+```bash
+kubectl exec -n default postgres-postgresql-0 -- psql -U admin -d postgres -c "CREATE DATABASE userdb;"
+kubectl exec -n default postgres-postgresql-0 -- psql -U admin -d postgres -c "CREATE DATABASE orderdb;"
+kubectl exec -n default postgres-postgresql-0 -- psql -U admin -d postgres -c "CREATE DATABASE paymentdb;"
+kubectl exec -n default postgres-postgresql-0 -- psql -U admin -d postgres -c "CREATE DATABASE productdb;"
+kubectl exec -n default postgres-postgresql-0 -- psql -U admin -d postgres -c "CREATE DATABASE searchdb;"
+kubectl exec -n default postgres-postgresql-0 -- psql -U admin -d postgres -c "CREATE DATABASE controlplanedb;"
+```
+
+If a DB already exists, Postgres returns `already exists` and you can continue.
+
+## Step 5: Restore Workloads
 
 Set replicas back to the normal values for each namespace/workload.
 
@@ -133,7 +160,7 @@ kubectl scale deploy -n default --all --replicas=1
 
 If specific services need different replica counts, set them explicitly per deployment.
 
-## Step 4: Validation After Resume
+## Step 6: Validation After Resume
 
 ```bash
 kubectl get nodes
