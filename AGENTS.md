@@ -28,9 +28,9 @@ Recent verified state:
 - Multi-service prod promotion is supported via service names only in `jenkins/promotion.env`, for example `PROMOTE_SERVICES=order-service,payment-service`; Jenkins reads immutable image tags from `dev` and promotes those images to `prod`.
 - `test` environment was decommissioned in repository config on 2026-05-03. Current pipeline behavior is deploy-to-`dev`, then promote `dev` image tags to `prod`.
 - Jenkins runs automatically every 2 minutes, so promotion/rollback detection is based on changed files since the previous successful commit when Jenkins provides that commit.
-- Current implementation focus is Log Analyzer, AI Cost Advisor, and RAG over runbooks/docs/incidents with MCP integration; canonical backend/shared context is `.context/backend-context.md`.
+- Core implementation scope is complete and validated. Current mode is maintenance/operations and documentation handoff; canonical backend/shared context is `.context/backend-context.md`.
 - Chaos planning source of truth: `.context/control-plane-chaos-plan.md`.
-- Chaos scenario status: only `ScaleToZero` is currently executable in Phase 1; the rest of the scenario catalog entries are defined but intentionally disabled placeholders.
+- Chaos scenario status: canonical Phase 1 scenario catalog is implemented and executable under existing control-plane guardrails.
 - Frontend direction: treat the `cloudpulse-ui` shadcn/Tailwind UI as the primary frontend going forward. Any legacy/previous frontend implementations are not the default target for new UI work unless explicitly requested.
 - `user-service` role support is implemented and locally verified; login/profile expose `role`.
 - `services/control-plane-service` is implemented and deployed in `monitoring`; it exposes `/health`, `/metrics`, and admin-guarded `/api/control-plane/*` live read APIs plus guarded scale `0/1` with audit logging.
@@ -49,6 +49,7 @@ Recent verified state:
 - Grafana PostgreSQL datasource credentials must come from Secret `grafana-postgres-datasource` in namespace `monitoring`; do not commit datasource credentials.
 - Grafana persistence is currently disabled; commit dashboard changes to Git instead of relying on UI-only edits.
 - Jenkins rollback and promotion operations are documented in `docs/rollback-runbook.md` and `docs/jenkins-promotion-runbook.md`.
+- AWS pause/resume operations are documented in `docs/aws-pause-resume-runbook.md`.
 - Use Git-controlled prod promotion through `jenkins/promotion.env`; do not rely on Jenkins UI approval buttons unless that flow is explicitly restored and tested.
 - Do not suggest quick patches or fast operational fixes by default (for example direct hotfix-style `kubectl set image` changes). Prefer canonical Git + pipeline flow unless the user explicitly asks for an emergency/break-glass fix.
 - This rule applies to direct Kubernetes runtime mutations as well (including `kubectl set image`, `kubectl set env`, manual scale/patch/apply against live workloads) unless explicitly requested.

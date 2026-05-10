@@ -1,8 +1,12 @@
 # MCP Architecture Plan (Control Plane)
 
-Last updated: 2026-05-09
-Status: Implemented in `services/control-plane-service` (flag-controlled; default disabled)
+Last updated: 2026-05-10
+Status: Implemented and validated in `services/control-plane-service`; operating in maintenance mode
 Scope: End-to-end MCP integration for `services/control-plane-service` read paths (no mutation)
+
+Project closure note:
+- MCP integration scope for control-plane read paths is complete for this project phase.
+- Ongoing activity is limited to operations monitoring and maintenance updates.
 
 ## 1) Goal
 

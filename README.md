@@ -2,7 +2,7 @@
 
 > Production-grade Kubernetes platform with event-driven microservices, full observability, and a roadmap toward automated self-healing.
 
-![Status](https://img.shields.io/badge/status-active-brightgreen)
+![Status](https://img.shields.io/badge/status-completed-success)
 ![Platform](https://img.shields.io/badge/platform-Kubernetes%20%28EKS%29-blue)
 ![Stack](https://img.shields.io/badge/stack-Node.js%20%7C%20Kafka%20%7C%20PostgreSQL-orange)
 ![Stage](https://img.shields.io/badge/stage-Self--Monitoring-yellow)
@@ -117,7 +117,7 @@ Grafana    ──► Prometheus
 | 11 | AI Layer — anomaly detection, cost optimization | ⏳ Future |
 | 12 | Control Plane Service — admin APIs, guarded actions, audit | ✅ Done |
 
-> **Current focus:** Log Analyzer, AI Cost Advisor, and RAG over runbooks/docs/incidents with MCP-aligned integration.
+> **Project status:** Core platform scope is complete and validated. Repository is now in maintenance/operations mode.
 
 ---
 
@@ -137,23 +137,86 @@ Grafana    ──► Prometheus
 
 ---
 
-## ⚙️ Local Development
+## ⚙️ Local Setup (Contributor Quick Start)
 
 ### Prerequisites
 
+- Git
 - Docker + Docker Compose
-- Node.js
-- `kubectl` configured for your cluster
+- Node.js 18+
+- npm
+- Optional for EKS deploy/verification only: `aws`, `kubectl`, `helm`
 
-### Run Locally
+### 1) Clone
 
 ```bash
 git clone https://github.com/<your-username>/self-healing-cloud-platform.git
 cd self-healing-cloud-platform
+```
 
-# Start full local stack
+### 2) Start Local Platform
+
+```bash
 docker-compose up --build
 ```
+
+This starts local microservices, Kafka, PostgreSQL, Prometheus, and Alertmanager.
+Local service ports:
+
+- `user-service`: `3000`
+- `order-service`: `3003`
+- `payment-service`: `4000`
+- `product-service`: `3005`
+- `search-service`: `5003`
+
+### 3) Verify Local Health
+
+```bash
+curl -i http://localhost:3000/health
+curl -i http://localhost:3003/health
+curl -i http://localhost:4000/health
+curl -i http://localhost:3005/health
+curl -i http://localhost:5003/health
+```
+
+Expected: HTTP `200` on healthy services.
+
+### 4) Control Plane / Ops Advice Validation
+
+Control-plane APIs are typically accessed through local ingress tunnel:
+
+- `http://localhost:18080/api/control-plane/*`
+
+Example:
+
+```bash
+curl -X POST "http://localhost:18080/api/control-plane/ops/advice" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <ADMIN_JWT>" \
+  -d '{"service":"payment-service","question":"What should I verify before rollback?"}'
+```
+
+Expected: HTTP `200` with `intent`, `answer`, `citations`, and `readOnly=true`.
+
+### 5) Run Backend Tests (Control Plane)
+
+```bash
+cd services/control-plane-service
+npm test
+```
+
+### 6) Rebuild Only One Service During Iteration
+
+```bash
+docker-compose up -d --build control-plane-service
+```
+
+### 7) Common Local Issues
+
+- Port conflict: free the port or change compose mapping.
+- `401/403` on control-plane routes: use an admin JWT.
+- No citations in ops advice: ensure corpus files are present under `services/control-plane-service/src/mcp/corpus/` in the running image/container.
+- Tunnel issues at `18080`: verify ingress tunnel target before changing code.
 
 Local services use `_local` suffix for DBs and Kafka topics to stay isolated from cluster environments.
 
@@ -202,7 +265,7 @@ kubectl set image deployment/<service> \
 kubectl rollout status deployment/<service> -n prod
 ```
 
-See the [Jenkins Promotion Runbook](./docs/jenkins-promotion-runbook.md) and [Rollback Runbook](./docs/rollback-runbook.md) for details.
+See the [Jenkins Promotion Runbook](./docs/jenkins-promotion-runbook.md), [Rollback Runbook](./docs/rollback-runbook.md), and [AWS Pause/Resume Runbook](./docs/aws-pause-resume-runbook.md) for operations details.
 
 ---
 
